@@ -1,2 +1,8 @@
 # Third-party research checkout; use the pinned upstream references in docs.
 /research/miuix-source/
+/base.apk
+/.gradle/
+/local.properties
+/**/build/
+/.idea/
+*.iml
