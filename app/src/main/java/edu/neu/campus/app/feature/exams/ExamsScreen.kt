@@ -74,11 +74,9 @@ fun ExamsScreen(
     val unarrangedExams = remember(rawExams) { rawExams.filter { !it.arranged } }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
+        edu.neu.campus.ui.components.CampusTopBar(
             title = "考试安排",
-            navigationIcon = {
-                Button(onClick = onBack) { Text("‹ 返回") }
-            }
+            onBack = onBack
         )
 
         LazyColumn(

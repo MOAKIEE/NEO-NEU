@@ -46,7 +46,7 @@ object FeatureRegistry {
             title = "成绩查询",
             description = "成绩与官方绩点",
             category = FeatureCategory.STUDY,
-            searchAliases = listOf("GPA", "绩点", "成绩", "分数", "期末成绩", "查分", "chengji"),
+            searchAliases = listOf("GPA", "绩点", "成绩", "分数", "期末成绩", "查分", "chengji", "cj", "jidian"),
             route = "grades"
         ),
         FeatureItem(
@@ -54,7 +54,7 @@ object FeatureRegistry {
             title = "考试安排",
             description = "时间与考场",
             category = FeatureCategory.STUDY,
-            searchAliases = listOf("考场", "考试", "座位号", "期末考试", "kaoshi"),
+            searchAliases = listOf("考场", "考试", "座位号", "期末考试", "kaoshi", "ks", "kaochang"),
             route = "exams"
         ),
         FeatureItem(
@@ -62,7 +62,7 @@ object FeatureRegistry {
             title = "课表与校历",
             description = "周课表与学期校历",
             category = FeatureCategory.STUDY,
-            searchAliases = listOf("课表", "课程表", "上课", "周课表", "kebiao"),
+            searchAliases = listOf("课表", "课程表", "上课", "周课表", "kebiao", "kb", "kcb"),
             route = "timetable"
         ),
         FeatureItem(
@@ -70,7 +70,7 @@ object FeatureRegistry {
             title = "作息时间",
             description = "校区上课作息时刻表",
             category = FeatureCategory.STUDY,
-            searchAliases = listOf("作息", "作息表", "几点上课", "节次时间", "下课时间"),
+            searchAliases = listOf("作息", "作息表", "几点上课", "节次时间", "下课时间", "zuoxi", "zx", "shijian"),
             route = "bell_schedule"
         ),
         FeatureItem(
@@ -78,7 +78,7 @@ object FeatureRegistry {
             title = "校园卡余额",
             description = "一卡通卡片余额",
             category = FeatureCategory.CAMPUS_LIFE,
-            searchAliases = listOf("一卡通", "饭卡", "卡余额", "校园卡", "刷卡", "xiaoyuanka"),
+            searchAliases = listOf("一卡通", "饭卡", "卡余额", "校园卡", "刷卡", "xiaoyuanka", "xyk", "ykt", "fanka"),
             route = "campus_card"
         ),
         FeatureItem(
@@ -86,7 +86,7 @@ object FeatureRegistry {
             title = "网费余额",
             description = "校园网账户余额",
             category = FeatureCategory.CAMPUS_LIFE,
-            searchAliases = listOf("校园网", "宽带", "网费", "上网", "wangfei"),
+            searchAliases = listOf("校园网", "宽带", "网费", "上网", "wangfei", "wf", "xyw"),
             route = "network"
         ),
         FeatureItem(
@@ -94,7 +94,7 @@ object FeatureRegistry {
             title = "消息中心",
             description = "门户与教务系统通知",
             category = FeatureCategory.MESSAGES_AFFAIRS,
-            searchAliases = listOf("通知", "消息", "公告", "统一消息", "xiaoxi"),
+            searchAliases = listOf("通知", "消息", "公告", "统一消息", "xiaoxi", "xx", "tongzhi", "tz"),
             route = "messages"
         ),
         FeatureItem(
@@ -102,7 +102,7 @@ object FeatureRegistry {
             title = "待办与申请",
             description = "待办事项与流程审批状态",
             category = FeatureCategory.MESSAGES_AFFAIRS,
-            searchAliases = listOf("待办", "已办", "我的申请", "审批", "事务", "daiban"),
+            searchAliases = listOf("待办", "已办", "我的申请", "审批", "事务", "daiban", "db", "shenpi"),
             route = "tasks"
         ),
         FeatureItem(
@@ -110,7 +110,7 @@ object FeatureRegistry {
             title = "学校服务目录",
             description = "官方网页办事指南及跳转",
             category = FeatureCategory.SERVICES,
-            searchAliases = listOf("服务", "校务", "官方系统", "办事大厅"),
+            searchAliases = listOf("服务", "校务", "官方系统", "办事大厅", "fuwu", "fw", "banshi", "mulu"),
             isNative = false,
             route = "services_catalog"
         )

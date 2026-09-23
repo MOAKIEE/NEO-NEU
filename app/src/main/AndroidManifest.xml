@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="NEO NEU"
+        android:theme="@style/Theme.NeoNeu"
         android:usesCleartextTraffic="false"
         android:allowBackup="false"
         android:supportsRtl="true">

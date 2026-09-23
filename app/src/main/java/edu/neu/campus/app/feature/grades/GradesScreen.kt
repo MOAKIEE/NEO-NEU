@@ -85,11 +85,9 @@ fun GradesScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = "成绩",
-            navigationIcon = {
-                Button(onClick = onBack) { Text("‹ 返回") }
-            }
+        edu.neu.campus.ui.components.CampusTopBar(
+            title = "成绩查询",
+            onBack = onBack
         )
 
         LazyColumn(

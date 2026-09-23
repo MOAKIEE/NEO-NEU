@@ -8,3 +8,5 @@
 *.iml
 *.hprof
 /.cxx/
+screenshot_*.png
+

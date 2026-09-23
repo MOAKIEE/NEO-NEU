@@ -107,17 +107,9 @@ fun ServicesCatalogScreen(
             .fillMaxSize()
             .background(MiuixTheme.colorScheme.background)
     ) {
-        TopAppBar(
+        edu.neu.campus.ui.components.CampusTopBar(
             title = "学校服务目录",
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = MiuixTheme.colorScheme.onSurface
-                    )
-                }
-            }
+            onBack = onBack
         )
 
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {

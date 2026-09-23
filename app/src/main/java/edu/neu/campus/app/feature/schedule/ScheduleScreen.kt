@@ -79,17 +79,9 @@ fun ScheduleScreen(
             .fillMaxSize()
             .background(MiuixTheme.colorScheme.background)
     ) {
-        TopAppBar(
+        edu.neu.campus.ui.components.CampusTopBar(
             title = "作息与校历",
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = MiuixTheme.colorScheme.onSurface
-                    )
-                }
-            }
+            onBack = onBack
         )
 
         // 分段切换：作息时间表 / 学期校历

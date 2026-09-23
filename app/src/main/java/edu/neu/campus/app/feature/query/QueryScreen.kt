@@ -6,16 +6,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.navigation.AppDestination
@@ -186,27 +188,52 @@ fun QueryScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                text = "学校服务目录",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MiuixTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "办事大厅、研究生管理、图书馆与财务系统入口",
-                                fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary
-                            )
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF1E88E5).copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1E88E5),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "学校服务目录",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MiuixTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "办事大厅、研究生管理、图书馆与财务系统入口",
+                                    fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                            }
                         }
 
                         Text(
                             text = "查看目录 ›",
                             fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.primary
                         )
                     }
                 }
+
+                // 底部留出安全呼吸空间，避免被底部导航栏贴住
+                Spacer(modifier = Modifier.height(28.dp))
             }
         }
     }
@@ -238,26 +265,52 @@ private fun CategorySection(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 rowItems.forEach { item ->
+                    val (icon, iconColor) = getFeatureIconAndColor(item.id)
                     Card(
                         colors = CardDefaults.defaultColors(),
-                        insideMargin = PaddingValues(14.dp),
+                        insideMargin = PaddingValues(12.dp),
                         modifier = Modifier
                             .weight(1f)
                             .clickable { onItemClick(item) }
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                text = item.title,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MiuixTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = item.description,
-                                fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                maxLines = 1
-                            )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(iconColor.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = iconColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = item.title,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = item.description,
+                                    fontSize = 11.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -276,6 +329,7 @@ private fun SearchResultItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val (icon, iconColor) = getFeatureIconAndColor(item.id)
     Card(
         colors = CardDefaults.defaultColors(),
         insideMargin = PaddingValues(14.dp),
@@ -288,49 +342,86 @@ private fun SearchResultItemCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
+            Row(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(iconColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = item.title,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onSurface
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(20.dp)
                     )
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MiuixTheme.colorScheme.surfaceContainer)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = item.category.displayName,
-                            fontSize = 10.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
-                        )
-                    }
                 }
 
-                Text(
-                    text = item.description,
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
-                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = item.title,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.onSurface
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MiuixTheme.colorScheme.surfaceContainer)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = item.category.displayName,
+                                fontSize = 10.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = item.description,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    )
+                }
             }
 
             Text(
                 text = "进入 ›",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
+    }
+}
+
+private fun getFeatureIconAndColor(id: String): Pair<androidx.compose.ui.graphics.vector.ImageVector, Color> {
+    return when (id) {
+        FeatureRegistry.ID_GRADES -> Pair(Icons.Default.Star, Color(0xFFFF9800))
+        FeatureRegistry.ID_EXAMS -> Pair(Icons.Default.DateRange, Color(0xFF7E57C2))
+        FeatureRegistry.ID_TIMETABLE -> Pair(Icons.Default.DateRange, Color(0xFF2196F3))
+        FeatureRegistry.ID_BELL_SCHEDULE -> Pair(Icons.Default.Notifications, Color(0xFF00ACC1))
+        FeatureRegistry.ID_CAMPUS_CARD -> Pair(Icons.Default.AccountBox, Color(0xFF43A047))
+        FeatureRegistry.ID_NETWORK -> Pair(Icons.Default.Share, Color(0xFF3949AB))
+        FeatureRegistry.ID_MESSAGES -> Pair(Icons.Default.Notifications, Color(0xFFE53935))
+        FeatureRegistry.ID_TASKS -> Pair(Icons.Default.CheckCircle, Color(0xFF00897B))
+        FeatureRegistry.ID_SERVICES_CATALOG -> Pair(Icons.Default.Menu, Color(0xFF1E88E5))
+        else -> Pair(Icons.Default.Search, Color(0xFF757575))
     }
 }
 

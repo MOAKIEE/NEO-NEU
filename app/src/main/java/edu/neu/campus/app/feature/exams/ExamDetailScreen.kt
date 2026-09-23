@@ -36,11 +36,9 @@ fun ExamDetailScreen(
     val exam = examsSnapshot?.data?.firstOrNull { it.courseName == courseName }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
+        edu.neu.campus.ui.components.CampusTopBar(
             title = "考试详情",
-            navigationIcon = {
-                Button(onClick = onBack) { Text("‹ 返回") }
-            }
+            onBack = onBack
         )
 
         Column(

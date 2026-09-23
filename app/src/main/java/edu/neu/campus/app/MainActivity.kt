@@ -150,13 +150,9 @@ class MainActivity : ComponentActivity() {
                             }
                             else -> {
                                 Column(modifier = Modifier.fillMaxSize()) {
-                                    TopAppBar(
+                                    edu.neu.campus.ui.components.CampusTopBar(
                                         title = "详情",
-                                        navigationIcon = {
-                                            Button(onClick = { AppNavigator.popBack() }) {
-                                                Text("‹ 返回")
-                                            }
-                                        }
+                                        onBack = { AppNavigator.popBack() }
                                     )
                                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                         Text("页面：$dest", fontSize = 16.sp)

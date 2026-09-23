@@ -25,6 +25,14 @@ import edu.neu.campus.ui.timetable.CourseDetailBottomSheet
 import edu.neu.campus.ui.timetable.TimetableGrid
 import edu.neu.campus.ui.timetable.dayOfWeekText
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -110,12 +118,35 @@ fun TimetableScreen(
         TopAppBar(
             title = "课表",
             actions = {
-                Button(onClick = { isListView = !isListView }) {
-                    Text(if (isListView) "网格视图" else "列表视图")
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .clickable { isListView = !isListView }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isListView) Icons.Default.DateRange else Icons.Default.Menu,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = if (isListView) "网格" else "列表",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.primary
+                    )
                 }
-                Spacer(modifier = Modifier.width(6.dp))
-                Button(onClick = { showUnscheduledSheet = true }) {
-                    Text("更多")
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = { showUnscheduledSheet = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "更多",
+                        tint = MiuixTheme.colorScheme.onSurface
+                    )
                 }
             }
         )
@@ -138,11 +169,11 @@ fun TimetableScreen(
             ) {
                 Text(
                     text = currentTerm?.name ?: "选择学期",
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onSurface
                 )
-                Text(text = " ▾", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceSecondary)
+                Text(text = " ▾", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceSecondary)
             }
 
             // 校区筛选
@@ -159,7 +190,7 @@ fun TimetableScreen(
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     val label = if (selectedCampusId == null) "全部校区" else campuses.firstOrNull { it.id == selectedCampusId }?.name ?: "校区"
-                    Text(text = "$label ▾", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceSecondary)
+                    Text(text = "$label ▾", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceSecondary)
                 }
             }
         }
@@ -172,23 +203,33 @@ fun TimetableScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    onClick = {
-                        val current = selectedWeekNumber ?: 1
-                        if (current > 1) selectedWeekNumber = current - 1
-                    },
-                    enabled = (selectedWeekNumber ?: 1) > 1
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .clickable(enabled = (selectedWeekNumber ?: 1) > 1) {
+                            val current = selectedWeekNumber ?: 1
+                            if (current > 1) selectedWeekNumber = current - 1
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("‹")
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "上一周",
+                        tint = if ((selectedWeekNumber ?: 1) > 1) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
-                Spacer(modifier = Modifier.width(6.dp))
+
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(MiuixTheme.colorScheme.surfaceContainer)
                         .clickable { showWeekPicker = true }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     val sDate = currentWeekObj?.startDate
                     val eDate = currentWeekObj?.endDate
@@ -197,28 +238,50 @@ fun TimetableScreen(
                     } else ""
                     Text(
                         text = "第 ${selectedWeekNumber ?: 1} 周$dateRange ▾",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MiuixTheme.colorScheme.primary
                     )
                 }
-                Spacer(modifier = Modifier.width(6.dp))
-                Button(
-                    onClick = {
-                        val current = selectedWeekNumber ?: 1
-                        val maxWeek = if (weeks.isNotEmpty()) weeks.maxOf { it.number } else 25
-                        if (current < maxWeek) selectedWeekNumber = current + 1
-                    }
+
+                val maxWeek = if (weeks.isNotEmpty()) weeks.maxOf { it.number } else 25
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .clickable(enabled = (selectedWeekNumber ?: 1) < maxWeek) {
+                            val current = selectedWeekNumber ?: 1
+                            if (current < maxWeek) selectedWeekNumber = current + 1
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("›")
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "下一周",
+                        tint = if ((selectedWeekNumber ?: 1) < maxWeek) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
 
             // 回本周按钮
             val currentActualWeek = weeks.firstOrNull { it.isCurrent }?.number
             if (currentActualWeek != null && selectedWeekNumber != currentActualWeek) {
-                Button(onClick = { selectedWeekNumber = currentActualWeek }) {
-                    Text("回本周")
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MiuixTheme.colorScheme.primary)
+                        .clickable { selectedWeekNumber = currentActualWeek }
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "回本周",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onPrimary
+                    )
                 }
             }
         }

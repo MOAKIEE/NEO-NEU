@@ -34,12 +34,19 @@ fun MainScreen(
     }
 
     if (destination != AppDestination.Main) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+        ) {
             DemoModeBanner()
             subScreen(destination)
         }
     } else {
         Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
             bottomBar = {
                 NavigationBar {
                     NavigationBarItem(

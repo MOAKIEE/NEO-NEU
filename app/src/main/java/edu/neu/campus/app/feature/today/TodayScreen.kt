@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -161,20 +162,23 @@ fun TodayScreen(
 
             Box(
                 modifier = Modifier
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .clickable { AppNavigator.navigateTo(AppDestination.Messages) }
-                    .padding(8.dp)
+                    .clickable { AppNavigator.navigateTo(AppDestination.Messages) },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Notifications,
                     contentDescription = "消息中心",
-                    tint = MiuixTheme.colorScheme.onSurface
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(24.dp)
                 )
                 if (hasUnreadMessage) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(9.dp)
                             .align(Alignment.TopEnd)
+                            .offset(x = (-8).dp, y = 8.dp)
                             .background(Color(0xFFE53935), CircleShape)
                     )
                 }
@@ -185,25 +189,56 @@ fun TodayScreen(
         if (sessionState.portal == DomainStatus.EXPIRED || sessionState.academic == DomainStatus.EXPIRED ||
             sessionState.portal == DomainStatus.SIGNED_OUT || sessionState.academic == DomainStatus.SIGNED_OUT
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFFFEBEE))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Card(
+                colors = CardDefaults.defaultColors(),
+                insideMargin = PaddingValues(14.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "学校会话需要认证或已过期",
-                    fontSize = 13.sp,
-                    color = Color(0xFFC62828)
-                )
-                Button(
-                    onClick = onLoginClick,
-                    colors = ButtonDefaults.buttonColorsPrimary()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("前往登录")
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFE53935).copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFE53935),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "学校账号需要认证",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "会话已过期，重新登录以同步课表与数据",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onLoginClick,
+                        colors = ButtonDefaults.buttonColorsPrimary()
+                    ) {
+                        Text("前往登录")
+                    }
                 }
             }
         } else if (timetableSnapshot?.isStale == true || cardSnapshot.isStale) {
@@ -248,6 +283,7 @@ fun TodayScreen(
                 if (feat != null) {
                     QuickActionButton(
                         title = feat.title.take(2),
+                        featureId = feat.id,
                         modifier = Modifier.weight(1f),
                         onClick = {
                             when (feat.id) {
@@ -266,6 +302,7 @@ fun TodayScreen(
             // 第 4 项固定“全部”
             QuickActionButton(
                 title = "全部",
+                featureId = "all",
                 modifier = Modifier.weight(1f),
                 onClick = { AppNavigator.navigateToTab(MainTab.QUERY) }
             )
@@ -352,12 +389,20 @@ fun TodayScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MiuixTheme.colorScheme.onSurface
                             )
-                            Text(
-                                text = if (hideBalance) "显示余额" else "隐藏余额",
-                                fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.primary,
-                                modifier = Modifier.clickable { edu.neu.campus.app.feature.balance.BalancePrivacyManager.toggleMasked() }
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(MiuixTheme.colorScheme.surfaceContainer)
+                                    .clickable { edu.neu.campus.app.feature.balance.BalancePrivacyManager.toggleMasked() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (hideBalance) "显示余额" else "隐藏余额",
+                                    fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.primary
+                                )
+                            }
                         }
 
                         Row(
@@ -371,12 +416,13 @@ fun TodayScreen(
                                 onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD)) }
                             ) {
                                 val card = cardSnapshot.data
-                                val displayVal = if (hideBalance) "¥ ••••" else if (card?.rawValue != null) "¥ ${card.rawValue}" else "未同步"
+                                val hasCardVal = card?.rawValue != null
+                                val displayVal = if (hideBalance) "¥ ••••" else if (hasCardVal) "¥ ${card.rawValue}" else "未同步"
                                 Text(
                                     text = displayVal,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = if (hasCardVal || hideBalance) 19.sp else 15.sp,
+                                    fontWeight = if (hasCardVal || hideBalance) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (hasCardVal || hideBalance) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary,
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
                                 Text(
@@ -393,12 +439,13 @@ fun TodayScreen(
                                 onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK)) }
                             ) {
                                 val net = netSnapshot.data
-                                val displayVal = if (hideBalance) "¥ ••••" else if (net?.rawValue != null) "¥ ${net.rawValue}" else "未同步"
+                                val hasNetVal = net?.rawValue != null
+                                val displayVal = if (hideBalance) "¥ ••••" else if (hasNetVal) "¥ ${net.rawValue}" else "未同步"
                                 Text(
                                     text = displayVal,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = if (hasNetVal || hideBalance) 19.sp else 15.sp,
+                                    fontWeight = if (hasNetVal || hideBalance) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (hasNetVal || hideBalance) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary,
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
                                 Text(
@@ -517,20 +564,29 @@ private fun NextCourseCard(
                 }
             }
             courses.isEmpty() -> {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "今天没有已安排课程",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "好好休息或查看本周后续排课",
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                    )
-                    Button(onClick = onGotoTimetable, modifier = Modifier.padding(top = 4.dp)) {
-                        Text("查看本周课表 ›")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "今天没有已安排课程",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "好好休息或查看本周后续排课",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        )
+                    }
+                    Button(onClick = onGotoTimetable) {
+                        Text("查看课表 ›")
                     }
                 }
             }
@@ -608,22 +664,55 @@ private fun NextCourseCard(
 @Composable
 private fun QuickActionButton(
     title: String,
+    featureId: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    val (icon, iconColor) = when (featureId) {
+        FeatureRegistry.ID_GRADES -> Pair(Icons.Default.Star, Color(0xFFFF9800))
+        FeatureRegistry.ID_EXAMS -> Pair(Icons.Default.DateRange, Color(0xFF7E57C2))
+        FeatureRegistry.ID_TASKS -> Pair(Icons.Default.CheckCircle, Color(0xFF26A69A))
+        FeatureRegistry.ID_CAMPUS_CARD -> Pair(Icons.Default.AccountBox, Color(0xFF42A5F5))
+        FeatureRegistry.ID_NETWORK -> Pair(Icons.Default.Share, Color(0xFF5C6BC0))
+        FeatureRegistry.ID_MESSAGES -> Pair(Icons.Default.Notifications, Color(0xFFEF5350))
+        "all" -> Pair(Icons.Default.Menu, MiuixTheme.colorScheme.primary)
+        else -> Pair(Icons.Default.Search, MiuixTheme.colorScheme.primary)
+    }
+
+    Card(
+        colors = CardDefaults.defaultColors(),
+        insideMargin = PaddingValues(0.dp),
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(MiuixTheme.colorScheme.surfaceContainer)
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
     ) {
-        Text(
-            text = title,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(iconColor.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+        }
     }
 }

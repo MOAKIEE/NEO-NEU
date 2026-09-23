@@ -68,17 +68,9 @@ fun BalanceDetailScreen(
             .fillMaxSize()
             .background(MiuixTheme.colorScheme.background)
     ) {
-        TopAppBar(
+        edu.neu.campus.ui.components.CampusTopBar(
             title = pageTitle,
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = MiuixTheme.colorScheme.onSurface
-                    )
-                }
-            },
+            onBack = onBack,
             actions = {
                 IconButton(
                     onClick = {
