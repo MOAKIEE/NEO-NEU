@@ -10,7 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,16 +26,15 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.CampusMessage
 import edu.neu.campus.contract.QueryPhase
+import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.theme.LocalCampusColors
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 enum class MessageSourceFilter(val label: String) {
     ALL("全部来源"),
@@ -48,19 +48,13 @@ enum class MessageStatusFilter(val label: String) {
     READ("学校已读")
 }
 
-/**
- * 消息中心列表页。
- * 遵循 docs/06-UI页面布局设计.md 第 9 节要求：
- * - 来源与已读/未读状态筛选
- * - 纯文本消息列表，展示标题（最多 2 行）、首行摘要、来源和时间
- * - 未读采用红点加状态标识，明确提示“阅读仅记录在本机，不改变学校已读状态”
- */
 @Composable
 fun MessagesScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val campusColors = LocalCampusColors.current
     val messagesSnapshot by CampusDataProvider.portal.messages(page = 1, pageSize = 30).collectAsState()
 
     var sourceFilter by remember { mutableStateOf(MessageSourceFilter.ALL) }
@@ -79,7 +73,6 @@ fun MessagesScreen(
                 MessageSourceFilter.ACADEMIC -> src.contains("教务") || src.contains("academic")
             }
 
-            // 状态筛选
             val matchStatus = when (statusFilter) {
                 MessageStatusFilter.ALL -> true
                 MessageStatusFilter.UNREAD -> msg.serverRead == false
@@ -93,9 +86,9 @@ fun MessagesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background)
+            .background(campusColors.background)
     ) {
-        edu.neu.campus.ui.components.CampusTopBar(
+        CampusTopBar(
             title = "消息中心",
             onBack = onBack,
             actions = {
@@ -110,7 +103,7 @@ fun MessagesScreen(
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "刷新",
-                        tint = if (isRefreshing) MiuixTheme.colorScheme.onSurfaceSecondary else MiuixTheme.colorScheme.primary
+                        tint = if (isRefreshing) campusColors.textSecondary else campusColors.brand
                     )
                 }
             }
@@ -136,10 +129,9 @@ fun MessagesScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 MessageSourceFilter.entries.forEach { f ->
-                    val isSelected = f == sourceFilter
                     FilterChip(
                         label = f.label,
-                        isSelected = isSelected,
+                        isSelected = f == sourceFilter,
                         onClick = { sourceFilter = f }
                     )
                 }
@@ -153,10 +145,9 @@ fun MessagesScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 MessageStatusFilter.entries.forEach { f ->
-                    val isSelected = f == statusFilter
                     FilterChip(
                         label = f.label,
-                        isSelected = isSelected,
+                        isSelected = f == statusFilter,
                         onClick = { statusFilter = f }
                     )
                 }
@@ -218,90 +209,122 @@ private fun MessageItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val campusColors = LocalCampusColors.current
     val isLocalRead = MessagesManager.isLocalRead(message.id)
     val isServerUnread = message.serverRead == false
     val summary = message.contentLines.firstOrNull()?.trim() ?: ""
 
+    val isAcademic = message.source?.contains("教务") == true || message.source?.contains("academic") == true
+
     Card(
-        colors = CardDefaults.defaultColors(),
-        insideMargin = PaddingValues(14.dp),
+        insideMargin = PaddingValues(16.dp),
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            // 标题行与未读圆点
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            // 左侧 40dp 来源图标
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isAcademic) campusColors.brandContainer else campusColors.messageLight),
+                contentAlignment = Alignment.Center
             ) {
-                // 未读红点
-                if (isServerUnread && !isLocalRead) {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 5.dp)
-                            .size(8.dp)
-                            .background(MiuixTheme.colorScheme.primary, CircleShape)
-                    )
-                }
-
-                Text(
-                    text = message.title,
-                    fontSize = 15.sp,
-                    fontWeight = if (isServerUnread && !isLocalRead) FontWeight.Bold else FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                val msgTime = message.time
-                if (msgTime != null) {
-                    Text(
-                        text = msgTime,
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                    )
-                }
-            }
-
-            // 摘要
-            if (summary.isNotBlank()) {
-                Text(
-                    text = summary,
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                Icon(
+                    imageVector = if (isAcademic) Icons.Default.Email else Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = if (isAcademic) campusColors.brand else campusColors.messageText,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            // 来源标签与状态
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                val sourceLabel = message.source ?: "智慧东大门户"
-                Text(
-                    text = sourceLabel,
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
-                )
+                // 标题行与时间
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (isServerUnread && !isLocalRead) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(campusColors.error)
+                            )
+                        }
 
-                if (isServerUnread) {
+                        Text(
+                            text = message.title,
+                            fontSize = 15.sp,
+                            fontWeight = if (isServerUnread && !isLocalRead) FontWeight.Bold else FontWeight.Medium,
+                            color = campusColors.textPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    val msgTime = message.time
+                    if (msgTime != null) {
+                        Text(
+                            text = msgTime,
+                            fontSize = 11.sp,
+                            color = campusColors.textSecondary,
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                }
+
+                // 摘要
+                if (summary.isNotBlank()) {
                     Text(
-                        text = if (isLocalRead) "学校未读 (本机已查)" else "未读",
-                        fontSize = 11.sp,
-                        color = if (isLocalRead) MiuixTheme.colorScheme.onSurfaceSecondary else MiuixTheme.colorScheme.primary
+                        text = summary,
+                        fontSize = 13.sp,
+                        color = campusColors.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                } else {
+                }
+
+                // 来源标签与状态
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val sourceLabel = message.source ?: "智慧东大门户"
                     Text(
-                        text = "已读",
+                        text = sourceLabel,
                         fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = campusColors.textSecondary
                     )
+
+                    if (isServerUnread) {
+                        Text(
+                            text = if (isLocalRead) "学校未读 (本机已查)" else "未读",
+                            fontSize = 11.sp,
+                            color = if (isLocalRead) campusColors.textSecondary else campusColors.brand
+                        )
+                    } else {
+                        Text(
+                            text = "已读",
+                            fontSize = 11.sp,
+                            color = campusColors.textSecondary
+                        )
+                    }
                 }
             }
         }
@@ -314,8 +337,9 @@ private fun FilterChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (isSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer
-    val textColor = if (isSelected) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface
+    val campusColors = LocalCampusColors.current
+    val bg = if (isSelected) campusColors.brandContainer else campusColors.surfaceMuted
+    val textColor = if (isSelected) campusColors.brand else campusColors.textSecondary
 
     Box(
         modifier = Modifier

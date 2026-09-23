@@ -13,13 +13,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,25 +29,21 @@ import edu.neu.campus.contract.CampusTask
 import edu.neu.campus.contract.QueryErrorKind
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.contract.TaskKind
+import edu.neu.campus.ui.components.CampusGroup
+import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.ui.components.CampusSection
+import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.theme.LocalCampusColors
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/**
- * 待办与申请页。
- * 遵循 docs/06-UI页面布局设计.md 第 10.1 节要求与 docs/handoff/data.md 约束：
- * - 待办 / 已办 / 我的申请 分段切换
- * - 如遇 SCHEMA_CHANGED 友好警示并引导至官方门户，绝不把变动误认为空或错误
- * - 任务详情只读展示，不包含虚构的“审批”“办理”“撤销”本地按钮
- */
 @Composable
 fun TasksScreen(
     onBack: () -> Unit,
@@ -55,6 +51,7 @@ fun TasksScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val campusColors = LocalCampusColors.current
 
     var activeTab by remember { mutableStateOf(TaskKind.TODO) }
     var inspectingTask by remember { mutableStateOf<CampusTask?>(null) }
@@ -66,9 +63,9 @@ fun TasksScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background)
+            .background(campusColors.background)
     ) {
-        edu.neu.campus.ui.components.CampusTopBar(
+        CampusTopBar(
             title = "待办与申请",
             onBack = onBack,
             actions = {
@@ -83,18 +80,20 @@ fun TasksScreen(
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "刷新",
-                        tint = if (isRefreshing) MiuixTheme.colorScheme.onSurfaceSecondary else MiuixTheme.colorScheme.primary
+                        tint = if (isRefreshing) campusColors.textSecondary else campusColors.brand
                     )
                 }
             }
         )
 
-        // 分段切换标签：待办 / 已办 / 我的申请
+        // 分段切换胶囊：待办事项 / 已办事项 / 我的申请
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(campusColors.surfaceMuted)
+                .padding(4.dp)
         ) {
             listOf(
                 TaskKind.TODO to "待办事项",
@@ -105,17 +104,17 @@ fun TasksScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) campusColors.surface else Color.Transparent)
                         .clickable { activeTab = kind }
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = label,
                         fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (isSelected) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) campusColors.brand else campusColors.textSecondary
                     )
                 }
             }
@@ -131,7 +130,7 @@ fun TasksScreen(
             val error = tasksSnapshot.error
 
             when {
-                // 特殊错误处理：SCHEMA_CHANGED（数据层交接文档明确指出非空记录目前会触发 SCHEMA_CHANGED）
+                // 特殊错误处理：SCHEMA_CHANGED
                 error?.kind == QueryErrorKind.SCHEMA_CHANGED -> {
                     SchemaChangedCard(context = context)
                 }
@@ -182,7 +181,7 @@ fun TasksScreen(
         }
     }
 
-    // 任务详情弹窗卡片
+    // 任务详情弹窗
     inspectingTask?.let { task ->
         TaskDetailDialog(
             task = task,
@@ -198,14 +197,14 @@ private fun TaskItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val campusColors = LocalCampusColors.current
     Card(
-        colors = CardDefaults.defaultColors(),
-        insideMargin = PaddingValues(14.dp),
+        insideMargin = PaddingValues(16.dp),
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -215,14 +214,14 @@ private fun TaskItemCard(
                     text = task.title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface,
+                    color = campusColors.textPrimary,
                     modifier = Modifier.weight(1f)
                 )
 
                 Text(
                     text = "查看 ›",
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.primary,
+                    fontSize = 13.sp,
+                    color = campusColors.brand,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
@@ -234,16 +233,16 @@ private fun TaskItemCard(
             ) {
                 Text(
                     text = "来源：智慧东大办公门户",
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    fontSize = 12.sp,
+                    color = campusColors.textSecondary
                 )
 
                 val tTime = task.time
                 if (tTime != null) {
                     Text(
                         text = tTime,
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        fontSize = 12.sp,
+                        color = campusColors.textSecondary
                     )
                 }
             }
@@ -253,6 +252,7 @@ private fun TaskItemCard(
 
 @Composable
 private fun SchemaChangedCard(context: Context) {
+    val campusColors = LocalCampusColors.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -260,45 +260,44 @@ private fun SchemaChangedCard(context: Context) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
-            colors = CardDefaults.defaultColors(),
-            insideMargin = PaddingValues(18.dp),
+            insideMargin = PaddingValues(20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
                         contentDescription = "警示",
-                        tint = MiuixTheme.colorScheme.primary,
+                        tint = campusColors.warning,
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
                         text = "学校待办中心接口格式变动",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onSurface
+                        color = campusColors.textPrimary
                     )
                 }
 
                 Text(
                     text = "学校智慧门户的待办事项数据返回格式近期发生升级变更。为保障学生个人数据解析准确性与账号安全，移动客户端已暂时挂起该接口的本地解析，未作盲目猜测。",
                     fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    lineHeight = 19.sp
+                    color = campusColors.textPrimary,
+                    lineHeight = 20.sp
                 )
 
                 Text(
                     text = "请通过学校官方门户网站登录待办系统查看或处理审批事务。",
                     fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    color = campusColors.textSecondary
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
                         onClick = {
@@ -309,9 +308,10 @@ private fun SchemaChangedCard(context: Context) {
                                 Toast.makeText(context, "无法启动系统浏览器", Toast.LENGTH_SHORT).show()
                             }
                         },
+                        colors = ButtonDefaults.buttonColorsPrimary(),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("在浏览器打开官方门户")
+                        Text("打开官方门户")
                     }
 
                     Button(
@@ -336,55 +336,49 @@ private fun TaskDetailDialog(
     context: Context,
     onDismiss: () -> Unit
 ) {
+    val campusColors = LocalCampusColors.current
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background.copy(alpha = 0.6f))
+            .background(Color.Black.copy(alpha = 0.5f))
             .clickable(onClick = onDismiss)
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
         Card(
-            colors = CardDefaults.defaultColors(),
             insideMargin = PaddingValues(20.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = false) {}
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
                     text = task.title,
-                    fontSize = 17.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = campusColors.textPrimary
                 )
 
-                Text(
-                    text = "类型：${if (task.kind == TaskKind.TODO) "待办事项" else if (task.kind == TaskKind.DONE) "已办事项" else "我的申请"}",
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
-                )
-
-                val tTime = task.time
-                if (tTime != null) {
-                    Text(
-                        text = "发生时间：$tTime",
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                CampusGroup {
+                    DetailRow(
+                        label = "事项类型",
+                        value = when (task.kind) {
+                            TaskKind.TODO -> "待办事项"
+                            TaskKind.DONE -> "已办事项"
+                            TaskKind.APPLICATION -> "我的申请"
+                        }
                     )
+                    CampusGroupDivider()
+                    DetailRow(label = "发生时间", value = task.time ?: "未提供具体时间")
+                    CampusGroupDivider()
+                    DetailRow(label = "来源系统", value = "智慧东大办公门户")
                 }
-
-                Text(
-                    text = "来源系统：智慧东大办公门户",
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
-                )
 
                 SafeDataTag(text = "只读展示 · 请前往官方系统办理")
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
                         onClick = {
@@ -395,9 +389,10 @@ private fun TaskDetailDialog(
                                 Toast.makeText(context, "无法启动浏览器", Toast.LENGTH_SHORT).show()
                             }
                         },
+                        colors = ButtonDefaults.buttonColorsPrimary(),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("在官方系统查看")
+                        Text("在官方系统办理")
                     }
 
                     Button(
@@ -409,5 +404,20 @@ private fun TaskDetailDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    val campusColors = LocalCampusColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, fontSize = 13.sp, color = campusColors.textSecondary)
+        Text(text = value, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = campusColors.textPrimary)
     }
 }

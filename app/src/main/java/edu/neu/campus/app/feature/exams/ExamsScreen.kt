@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,16 +20,20 @@ import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
-import edu.neu.campus.contract.*
+import edu.neu.campus.contract.Exam
+import edu.neu.campus.contract.QueryPhase
+import edu.neu.campus.contract.Term
+import edu.neu.campus.ui.components.CampusGroup
+import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
-import edu.neu.campus.ui.components.QueryCard
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.theme.LocalCampusColors
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 enum class ExamTab {
     ARRANGED, UNARRANGED
@@ -38,6 +45,7 @@ fun ExamsScreen(
     onLoginClick: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val campusColors = LocalCampusColors.current
     val academic = CampusDataProvider.academic
 
     val termsSnapshot by academic.terms().collectAsState()
@@ -73,8 +81,12 @@ fun ExamsScreen(
     val arrangedExams = remember(rawExams) { rawExams.filter { it.arranged } }
     val unarrangedExams = remember(rawExams) { rawExams.filter { !it.arranged } }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        edu.neu.campus.ui.components.CampusTopBar(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(campusColors.background)
+    ) {
+        CampusTopBar(
             title = "考试安排",
             onBack = onBack
         )
@@ -85,7 +97,7 @@ fun ExamsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. 学期选择栏
+            // 1. 学期选择与更新状态
             item {
                 Row(
                     modifier = Modifier
@@ -96,19 +108,23 @@ fun ExamsScreen(
                 ) {
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MiuixTheme.colorScheme.surfaceContainer)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(campusColors.surface)
                             .clickable { showTermPicker = true }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = currentTerm?.name ?: "选择学期",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onSurface
+                            color = campusColors.textPrimary
                         )
-                        Text(text = " ▾", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceSecondary)
+                        Text(
+                            text = " ▾",
+                            fontSize = 12.sp,
+                            color = campusColors.textSecondary
+                        )
                     }
 
                     SafeDataTag(
@@ -119,13 +135,13 @@ fun ExamsScreen(
                 }
             }
 
-            // 2. 分段切换：【已安排】 / 【未安排】
+            // 2. 分段切换药丸：【已安排 (N)】 / 【未安排 (N)】
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(campusColors.surfaceMuted)
                         .padding(4.dp)
                 ) {
                     val countArranged = if (examsSnapshot?.phase == QueryPhase.READY) " (${arrangedExams.size})" else ""
@@ -134,34 +150,34 @@ fun ExamsScreen(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selectedTab == ExamTab.ARRANGED) MiuixTheme.colorScheme.surface else Color.Transparent)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selectedTab == ExamTab.ARRANGED) campusColors.surface else Color.Transparent)
                             .clickable { selectedTab = ExamTab.ARRANGED }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "已安排$countArranged",
                             fontSize = 14.sp,
                             fontWeight = if (selectedTab == ExamTab.ARRANGED) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == ExamTab.ARRANGED) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
+                            color = if (selectedTab == ExamTab.ARRANGED) campusColors.examText else campusColors.textSecondary
                         )
                     }
 
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selectedTab == ExamTab.UNARRANGED) MiuixTheme.colorScheme.surface else Color.Transparent)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selectedTab == ExamTab.UNARRANGED) campusColors.surface else Color.Transparent)
                             .clickable { selectedTab = ExamTab.UNARRANGED }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "未安排$countUnarranged",
                             fontSize = 14.sp,
                             fontWeight = if (selectedTab == ExamTab.UNARRANGED) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == ExamTab.UNARRANGED) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
+                            color = if (selectedTab == ExamTab.UNARRANGED) campusColors.brand else campusColors.textSecondary
                         )
                     }
                 }
@@ -197,46 +213,98 @@ fun ExamsScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         text = "该学期暂无已安排考试",
-                                        fontSize = 15.sp,
+                                        fontSize = 16.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = MiuixTheme.colorScheme.onSurface
+                                        color = campusColors.textPrimary
                                     )
                                     Text(
                                         text = "学校尚未公布具体排考，请留意教务通知或查看“未安排”选项",
                                         fontSize = 13.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                        modifier = Modifier.padding(top = 4.dp)
+                                        color = campusColors.textSecondary,
+                                        modifier = Modifier.padding(top = 6.dp)
                                     )
                                 }
                             }
                         }
                     } else {
                         items(arrangedExams) { exam ->
-                            QueryCard(
-                                title = exam.courseName,
-                                subtitle = exam.timeDescription ?: "考试时间待定",
-                                onClick = {
-                                    AppNavigator.navigateTo(AppDestination.ExamDetail(exam.courseName))
-                                }
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        AppNavigator.navigateTo(AppDestination.ExamDetail(exam.courseName))
+                                    },
+                                insideMargin = PaddingValues(16.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "考场：${exam.place ?: "尚未公布"}",
-                                        fontSize = 13.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                                    )
-                                    if (!exam.seat.isNullOrBlank()) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Text(
-                                            text = "座位：${exam.seat}",
+                                            text = exam.courseName,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = campusColors.textPrimary,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        if (!exam.seat.isNullOrBlank()) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(campusColors.examLight)
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${exam.seat} 座",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = campusColors.examText
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DateRange,
+                                            contentDescription = null,
+                                            tint = campusColors.textSecondary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = exam.timeDescription ?: "考试时间待定",
                                             fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MiuixTheme.colorScheme.primary
+                                            color = campusColors.textSecondary,
+                                            modifier = Modifier.padding(start = 6.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = null,
+                                            tint = campusColors.textSecondary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = exam.place ?: "考场地点尚未公布",
+                                            fontSize = 13.sp,
+                                            color = campusColors.textPrimary,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(start = 6.dp)
                                         )
                                     }
                                 }
@@ -256,19 +324,53 @@ fun ExamsScreen(
                                 Text(
                                     text = "暂无未安排考试记录",
                                     fontSize = 14.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    color = campusColors.textSecondary
                                 )
                             }
                         }
                     } else {
                         items(unarrangedExams) { exam ->
-                            QueryCard(
-                                title = exam.courseName,
-                                subtitle = exam.status ?: "随堂考查或尚未统一安排考场",
-                                onClick = {
-                                    AppNavigator.navigateTo(AppDestination.ExamDetail(exam.courseName))
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        AppNavigator.navigateTo(AppDestination.ExamDetail(exam.courseName))
+                                    },
+                                insideMargin = PaddingValues(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = exam.courseName,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = campusColors.textPrimary
+                                        )
+                                        Text(
+                                            text = exam.status ?: "随堂考查或尚未统一安排考场",
+                                            fontSize = 12.sp,
+                                            color = campusColors.textSecondary,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(campusColors.surfaceMuted)
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "未排考",
+                                            fontSize = 11.sp,
+                                            color = campusColors.textSecondary
+                                        )
+                                    }
                                 }
-                            ) {}
+                            }
                         }
                     }
                 }
@@ -298,8 +400,8 @@ fun ExamsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) MiuixTheme.colorScheme.primary.copy(alpha = 0.12f) else MiuixTheme.colorScheme.surfaceContainer)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) campusColors.brandContainer else campusColors.surfaceMuted)
                             .clickable {
                                 selectedTerm = t
                                 showTermPicker = false
@@ -312,7 +414,7 @@ fun ExamsScreen(
                             text = t.name + if (t.isCurrent) " (当前)" else "",
                             fontSize = 15.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
+                            color = if (isSelected) campusColors.brand else campusColors.textPrimary
                         )
                     }
                 }
