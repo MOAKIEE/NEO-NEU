@@ -50,48 +50,8 @@ fun ServicesCatalogScreen(
 
     val serviceList = remember {
         listOf(
-            CampusServiceItem(
-                id = "portal",
-                name = "智慧东大综合门户",
-                category = "公共办事",
-                description = "全校师生信息门户、校内公文、通知公告与各项校级在线流程填报中心。",
-                officialUrl = "http://portal.neu.edu.cn"
-            ),
-            CampusServiceItem(
-                id = "grad",
-                name = "研究生管理信息系统",
-                category = "教学教务",
-                description = "东北大学研究生培养、学籍、学位论文与导师互动系统。",
-                officialUrl = "http://gsapp.neu.edu.cn"
-            ),
-            CampusServiceItem(
-                id = "net",
-                name = "校园网综合自服务平台",
-                category = "网络信息",
-                description = "宿舍万兆宽带与无线账号管理、网费明细充值、MAC 终端在线管理与密码重置。",
-                officialUrl = "http://ipgw.neu.edu.cn"
-            ),
-            CampusServiceItem(
-                id = "lib",
-                name = "东北大学图书馆",
-                category = "图书图书",
-                description = "馆藏图书检索、续借、学位论文提交与中外文电子学术数据库查阅。",
-                officialUrl = "http://lib.neu.edu.cn"
-            ),
-            CampusServiceItem(
-                id = "finance",
-                name = "财务综合综合自服务系统",
-                category = "财务资产",
-                description = "学生学费缴费、学业奖学金发放记录、财务报销进度与学费收据查询。",
-                officialUrl = "http://cwzf.neu.edu.cn"
-            ),
-            CampusServiceItem(
-                id = "sports",
-                name = "体质健康测试管理中心",
-                category = "体育健康",
-                description = "全日制本科生国家学生体质健康标准测试预约、免测申请与成绩查询。",
-                officialUrl = "http://pe.neu.edu.cn"
-            )
+            CampusServiceItem("portal", "智慧东大门户", "学校门户", "在学校官方门户查看服务。", "https://personal.neu.edu.cn/portal"),
+            CampusServiceItem("academic", "本科教务系统", "教学教务", "在学校官方教务系统查看信息。", "https://jwxt.neu.edu.cn/")
         )
     }
 

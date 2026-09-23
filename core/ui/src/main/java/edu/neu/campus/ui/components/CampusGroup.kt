@@ -15,7 +15,7 @@ import top.yukonga.miuix.kmp.basic.Text
 
 /**
  * NEO NEU B 类 Surface 统一分组容器 (CampusGroup)。
- * 严格遵照 docs/07-UI视觉与布局重设计.md 第 2.3 节规范：
+ * 组件约定：
  * - 承载列表与字段信息，避免列表项反复套小卡
  * - 20dp 圆角，背景为 Surface，标题在卡片外部独立呈现
  * - 内部列表项之间支持平滑的 1dp 分隔线与缩进

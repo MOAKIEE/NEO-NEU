@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,7 +43,7 @@ enum class GradeSortOrder(val label: String) {
 
 /**
  * 成绩查询页面。
- * 严格遵照 docs/07-UI视觉与布局重设计.md 第 7.1 节规范：
+ * 组件约定：
  * - 紧凑标题栏 -> 浅紫统计卡 -> 学期选择/排序 -> 本地搜索 -> 成绩列表
  * - 统计卡大数字 32-38sp，官方口径说明与最近同步时间
  * - 左右结构成绩行：左侧课程名与学分，右侧 24sp 成绩与官方绩点
@@ -61,7 +62,7 @@ fun GradesScreen(
     val gradeSummarySnapshot by academic.gradeSummary().collectAsState()
 
     val availableTerms = gradeTermIdsSnapshot.data ?: termsSnapshot.data?.map { it.id }.orEmpty()
-    var selectedTermId by remember { mutableStateOf<String?>(null) }
+    var selectedTermId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         academic.refreshTerms()
@@ -80,8 +81,8 @@ fun GradesScreen(
         }
     }
 
-    var searchQuery by remember { mutableStateOf("") }
-    var sortOrder by remember { mutableStateOf(GradeSortOrder.DEFAULT) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var sortOrder by rememberSaveable { mutableStateOf(GradeSortOrder.DEFAULT) }
     var showTermPicker by remember { mutableStateOf(false) }
 
     val rawGrades = gradesSnapshot?.data.orEmpty()
@@ -142,7 +143,7 @@ fun GradesScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = colors.gradeForeground
                             )
-                            val scopeText = gradeSummarySnapshot.data?.scope ?: "学校统计口径 · 全学程"
+                            val scopeText = gradeSummarySnapshot.data?.scope ?: "学校返回统计值"
                             Text(
                                 text = "$scopeText · 最近同步 ${TimeFormatter.formatTime(gradeSummarySnapshot.lastSuccessEpochMillis)}",
                                 fontSize = 11.sp,
@@ -168,6 +169,15 @@ fun GradesScreen(
                 }
             }
 
+            if (gradeSummarySnapshot.error != null) item {
+                LoadStatePanel(false, error = gradeSummarySnapshot.error,
+                    onRetry = { coroutineScope.launch { academic.refreshGradeSummary() } }, onLogin = onLoginClick)
+            }
+            if (gradeSummarySnapshot.isStale) item { SafeDataTag(text = "绩点为上次同步数据") }
+            if (termsSnapshot.error != null || gradeTermIdsSnapshot.error != null) item {
+                LoadStatePanel(false, error = gradeTermIdsSnapshot.error ?: termsSnapshot.error,
+                    onRetry = { coroutineScope.launch { academic.refreshTerms(); academic.refreshGradeTermIds() } }, onLogin = onLoginClick)
+            }
             // 2. 学期选择与排序
             item {
                 Row(
@@ -184,7 +194,7 @@ fun GradesScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (activeTermId.isBlank()) "全部学期" else activeTermId,
+                            text = if (activeTermId.isBlank()) "暂无可选学期" else activeTermId,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = colors.textPrimary

@@ -31,19 +31,21 @@ import top.yukonga.miuix.kmp.basic.Text
 @Composable
 fun MessageDetailScreen(
     messageId: String,
+    page: Int = 1,
+    status: Int = 0,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val campusColors = LocalCampusColors.current
-    val messagesSnapshot by CampusDataProvider.portal.messages(page = 1, pageSize = 30).collectAsState()
+    val messagesSnapshot by CampusDataProvider.portal.messages(page = page, pageSize = 30, status = status).collectAsState()
 
     // 查找目标消息
     val message = messagesSnapshot.data?.items?.firstOrNull { it.id == messageId }
 
     // 自动标记本机已读
-    LaunchedEffect(messageId) {
-        if (messageId.isNotBlank()) {
+    LaunchedEffect(message?.id) {
+        if (message != null) {
             MessagesManager.markAsLocalRead(messageId)
         }
     }
@@ -117,7 +119,7 @@ fun MessageDetailScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val serverStateText = if (message.serverRead == true) "学校状态：已读" else "学校状态：未读"
+                        val serverStateText = when (message.serverRead) { true -> "学校状态：已读"; false -> "学校状态：未读"; null -> "学校状态：未提供" }
                         Text(
                             text = serverStateText,
                             fontSize = 11.sp,

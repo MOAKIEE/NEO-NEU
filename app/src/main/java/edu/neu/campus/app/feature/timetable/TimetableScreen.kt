@@ -13,8 +13,10 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -51,11 +53,12 @@ fun TimetableScreen(
 
     val termsSnapshot by academic.terms().collectAsState()
     val terms = termsSnapshot.data.orEmpty()
-    var selectedTerm by remember { mutableStateOf<Term?>(null) }
+    var selectedTermId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedTerm = terms.firstOrNull { it.id == selectedTermId }
 
     LaunchedEffect(terms) {
         if (selectedTerm == null && terms.isNotEmpty()) {
-            selectedTerm = terms.firstOrNull { it.isCurrent } ?: terms.first()
+            selectedTermId = (terms.firstOrNull { it.isCurrent } ?: terms.first()).id
         }
     }
 
@@ -68,9 +71,9 @@ fun TimetableScreen(
     val currentTerm = selectedTerm
     var weeks by remember { mutableStateOf<List<TeachingWeek>>(emptyList()) }
     var campuses by remember { mutableStateOf<List<Campus>>(emptyList()) }
-    var selectedWeekNumber by remember { mutableStateOf<Int?>(null) }
-    var selectedCampusId by remember { mutableStateOf<String?>(null) }
-    var isListView by remember { mutableStateOf(false) }
+    var selectedWeekNumber by rememberSaveable(currentTerm?.id) { mutableStateOf<Int?>(null) }
+    var selectedCampusId by rememberSaveable(currentTerm?.id) { mutableStateOf<String?>(null) }
+    var isListView by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(currentTerm?.id) {
         val termId = currentTerm?.id ?: return@LaunchedEffect
@@ -82,7 +85,7 @@ fun TimetableScreen(
     LaunchedEffect(weeksSnapshot?.data) {
         val wList = weeksSnapshot?.data.orEmpty()
         weeks = wList
-        if (selectedWeekNumber == null && wList.isNotEmpty()) {
+        if (wList.none { it.number == selectedWeekNumber } && wList.isNotEmpty()) {
             selectedWeekNumber = wList.firstOrNull { it.isCurrent }?.number ?: wList.first().number
         }
     }
@@ -216,7 +219,7 @@ fun TimetableScreen(
                 // 上一周按钮 (touch target >= 44dp)
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(48.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(colors.surface)
                         .clickable(enabled = (selectedWeekNumber ?: 1) > 1) {
@@ -259,7 +262,7 @@ fun TimetableScreen(
                 val maxWeek = if (weeks.isNotEmpty()) weeks.maxOf { it.number } else 25
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(48.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(colors.surface)
                         .clickable(enabled = (selectedWeekNumber ?: 1) < maxWeek) {
@@ -298,6 +301,12 @@ fun TimetableScreen(
             }
         }
 
+        if (termsSnapshot.error != null || weeksSnapshot?.error != null) {
+            LoadStatePanel(false, error = weeksSnapshot?.error ?: termsSnapshot.error,
+                onRetry = { coroutineScope.launch { academic.refreshTerms(); currentTerm?.let { academic.refreshWeeks(it.id) } } },
+                onLogin = onLoginClick)
+        }
+        if (timetableSnapshot?.isStale == true) SafeDataTag(text = "当前显示上次同步课表，可能已变化")
         // 状态处理：加载与异常重试
         if (timetableSnapshot != null && (timetableSnapshot.phase == QueryPhase.LOADING || timetableSnapshot.phase == QueryPhase.FAILED)) {
             LoadStatePanel(
@@ -314,11 +323,12 @@ fun TimetableScreen(
 
         // 课表内容展示
         Box(modifier = Modifier.weight(1f)) {
-            if (!isListView) {
+            if (!isListView && LocalDensity.current.fontScale < 1.3f && !(selectedCampusId == null && campuses.size > 1)) {
                 // 网格视图
                 TimetableGrid(
                     courses = filteredCourses,
                     currentWeek = currentWeekObj,
+                    sections = rawTable?.sectionsByCampus?.let { if (selectedCampusId != null) it[selectedCampusId].orEmpty() else it.values.flatten() }.orEmpty(),
                     onCourseClick = { inspectingCourse = it },
                     onConflictClick = { conflictCourses = it }
                 )
@@ -331,12 +341,12 @@ fun TimetableScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     for (day in 1..7) {
-                        val dayCourses = filteredCourses.filter { it.dayOfWeek == day }
+                        val dayCourses = filteredCourses.filter { it.dayOfWeek == day }.sortedWith(compareBy({ it.campusId }, { it.beginSection }))
                         if (dayCourses.isNotEmpty()) {
                             item {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(
-                                        text = "星期${dayOfWeekText(day)}",
+                                        text = "星期${dayOfWeekText(day)}${if (selectedCampusId == null && campuses.size > 1) " · 按校区显示" else ""}",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = colors.textPrimary,
@@ -367,7 +377,7 @@ fun TimetableScreen(
                                                     )
                                                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                         Text(
-                                                            text = c.title,
+                                                            text = if (campuses.size > 1) "${c.title} · ${campuses.firstOrNull { it.id == c.campusId }?.name ?: c.campusId}" else c.title,
                                                             fontSize = 15.sp,
                                                             fontWeight = FontWeight.Medium,
                                                             color = colors.textPrimary
@@ -511,7 +521,7 @@ fun TimetableScreen(
                                 )
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(
-                                        text = c.title,
+                                        text = if (campuses.size > 1) "${c.title} · ${campuses.firstOrNull { it.id == c.campusId }?.name ?: c.campusId}" else c.title,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = colors.textPrimary
@@ -610,7 +620,7 @@ fun TimetableScreen(
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) colors.brandContainer else colors.surface)
                             .clickable {
-                                selectedTerm = t
+                                selectedTermId = t.id
                                 selectedWeekNumber = null
                                 showTermPicker = false
                             }

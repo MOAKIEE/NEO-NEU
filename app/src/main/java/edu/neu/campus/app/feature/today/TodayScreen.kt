@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -41,6 +43,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TodayScreen(
     onLoginClick: () -> Unit
@@ -50,40 +53,24 @@ fun TodayScreen(
     val portal = CampusDataProvider.portal
     val session = CampusDataProvider.session
     val colors = CampusTheme.colors
+    val compact = LocalConfiguration.current.screenWidthDp < 360 || LocalDensity.current.fontScale >= 1.3f
 
     val sessionState by session.state.collectAsState()
     val termsSnapshot by academic.terms().collectAsState()
-    val currentTerm = termsSnapshot.data?.firstOrNull { it.isCurrent } ?: termsSnapshot.data?.firstOrNull()
+    val currentTerm = termsSnapshot.data?.firstOrNull { it.isCurrent }
 
     // 教学周
     val weeksSnapshot = currentTerm?.let { academic.weeks(it.id).collectAsState().value }
-    val currentWeek = weeksSnapshot?.data?.firstOrNull { it.isCurrent } ?: weeksSnapshot?.data?.firstOrNull()
+    val currentWeek = weeksSnapshot?.data?.firstOrNull { it.isCurrent }
 
-    // 今日周几 (1..7)
-    val todayDayOfWeek = remember {
-        val cal = Calendar.getInstance()
-        when (cal.get(Calendar.DAY_OF_WEEK)) {
-            Calendar.MONDAY -> 1
-            Calendar.TUESDAY -> 2
-            Calendar.WEDNESDAY -> 3
-            Calendar.THURSDAY -> 4
-            Calendar.FRIDAY -> 5
-            Calendar.SATURDAY -> 6
-            Calendar.SUNDAY -> 7
-            else -> 1
-        }
-    }
-
-    // 格式化今日公历日期
-    val todayDateStr = remember {
-        val sdf = SimpleDateFormat("M 月 d 日 EEE", Locale.SIMPLIFIED_CHINESE).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Shanghai")
-        }
-        sdf.format(Date())
-    }
+    val schoolClock = rememberSchoolClock()
+    val todayDayOfWeek = (schoolClock.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
+    val todayDateStr = SimpleDateFormat("M 月 d 日 EEE", Locale.SIMPLIFIED_CHINESE).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+    }.format(schoolClock.time)
 
     // 课表快照
-    val timetableSnapshot = if (currentTerm != null) {
+    val timetableSnapshot = if (currentTerm != null && currentWeek != null) {
         academic.timetable(currentTerm.id, currentWeek?.number).collectAsState().value
     } else null
 
@@ -108,11 +95,10 @@ fun TodayScreen(
         portal.refreshMessages(page = 1, pageSize = 5)
     }
 
-    LaunchedEffect(currentTerm?.id) {
+    LaunchedEffect(currentTerm?.id, todayDateStr) {
         val termId = currentTerm?.id ?: return@LaunchedEffect
         academic.refreshWeeks(termId)
         academic.refreshCampuses(termId)
-        academic.refreshTimetable(termId, currentWeek?.number)
         academic.refreshExams(termId)
         portal.refreshTasks(TaskKind.TODO, page = 1, pageSize = 5)
     }
@@ -123,12 +109,14 @@ fun TodayScreen(
         arrangedCourses.filter { it.dayOfWeek == todayDayOfWeek }.sortedBy { it.beginSection }
     }
 
-    // 计算当前时间字符串 (HH:mm)
-    val nowTimeStr = remember {
-        SimpleDateFormat("HH:mm", Locale.SIMPLIFIED_CHINESE).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Shanghai")
-        }.format(Date())
+    LaunchedEffect(currentTerm?.id, currentWeek?.number) {
+        val termId = currentTerm?.id ?: return@LaunchedEffect
+        val week = currentWeek?.number ?: return@LaunchedEffect
+        academic.refreshTimetable(termId, week)
     }
+    val nowTimeStr = SimpleDateFormat("HH:mm", Locale.CHINA).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+    }.format(schoolClock.time)
 
     var inspectingCourse by remember { mutableStateOf<CourseOccurrence?>(null) }
     var conflictCourses by remember { mutableStateOf<List<CourseOccurrence>?>(null) }
@@ -260,7 +248,7 @@ fun TodayScreen(
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "网络连接受阻，当前显示上次获取的信息",
+                    text = "当前包含上次同步的数据，请留意各项同步时间",
                     fontSize = 12.sp,
                     color = colors.textSecondary
                 )
@@ -271,23 +259,29 @@ fun TodayScreen(
         HeroCourseCard(
             courses = todayCourses,
             nowTimeStr = nowTimeStr,
-            isLoading = timetableSnapshot?.phase == QueryPhase.LOADING && timetableSnapshot.data == null,
-            error = timetableSnapshot?.error,
+            isLoading = (termsSnapshot.phase == QueryPhase.LOADING || weeksSnapshot?.phase == QueryPhase.LOADING || timetableSnapshot?.phase == QueryPhase.LOADING) && timetableSnapshot?.data == null,
+            error = timetableSnapshot?.error ?: weeksSnapshot?.error ?: termsSnapshot.error,
             isStale = timetableSnapshot?.isStale ?: false,
-            hasConfirmedTerm = currentTerm != null,
+            hasConfirmedTerm = currentTerm != null && currentWeek != null,
+            hasData = timetableSnapshot?.data != null,
             onClickCourse = { inspectingCourse = it },
             onConflictClick = { conflictCourses = it },
             onGotoTimetable = { AppNavigator.navigateToTab(MainTab.TIMETABLE) },
             onRetry = {
-                currentTerm?.let {
-                    coroutineScope.launch { academic.refreshTimetable(it.id, currentWeek?.number) }
+                coroutineScope.launch {
+                    academic.refreshTerms()
+                    currentTerm?.let { term ->
+                        academic.refreshWeeks(term.id)
+                        currentWeek?.let { academic.refreshTimetable(term.id, it.number) }
+                    }
                 }
             }
         )
 
         // 4. 快捷入口无外壳四等列（图标上、标签下，采用完整短标签与统一功能色）
-        Row(
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
+            maxItemsInEachRow = if (compact) 2 else 4,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val quickIds = HomeLayoutConfigManager.quickActionIds
@@ -303,7 +297,7 @@ fun TodayScreen(
             quickIds.take(3).forEach { featureId ->
                 val feat = FeatureRegistry.findById(featureId)
                 val config = candidateItems[featureId]
-                val label = config?.first ?: (feat?.title?.take(2) ?: "功能")
+                val label = config?.first ?: (feat?.title ?: "功能")
                 val icon = config?.second?.first ?: Icons.Default.Search
                 val (fg, bg) = config?.second?.second ?: (colors.brand to colors.brandContainer)
 
@@ -348,8 +342,15 @@ fun TodayScreen(
                         actionText = "完整课表 ›",
                         onActionClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
                     ) {
-                        CourseTimeline(
+                        if (timetableSnapshot?.data == null) {
+                            LoadStatePanel(
+                                isLoading = timetableSnapshot?.phase == QueryPhase.LOADING,
+                                error = timetableSnapshot?.error ?: weeksSnapshot?.error ?: termsSnapshot.error,
+                                emptyMessage = "尚未获取已确认教学周的课程"
+                            )
+                        } else CourseTimeline(
                             courses = todayCourses,
+                            trusted = !timetableSnapshot.isStale,
                             nowTimeStr = nowTimeStr,
                             onCourseClick = { inspectingCourse = it },
                             onSeeAllClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
@@ -364,14 +365,19 @@ fun TodayScreen(
                         actionText = if (hideBalance) "显示余额" else "隐藏余额",
                         onActionClick = { edu.neu.campus.app.feature.balance.BalancePrivacyManager.toggleMasked() }
                     ) {
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
+                            maxItemsInEachRow = if (compact) 1 else 2,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             // 校园卡余额卡片 (Light Green)
                             BalanceSummaryCard(
                                 title = "校园卡",
                                 balanceValue = cardSnapshot.data?.rawValue,
+                                serverMasked = cardSnapshot.data?.isMasked == true,
+                                stateError = cardSnapshot.error?.message,
+                                stale = cardSnapshot.isStale,
                                 lastSuccessEpochMillis = cardSnapshot.lastSuccessEpochMillis,
                                 isMasked = hideBalance,
                                 cardBg = colors.cardContainer,
@@ -385,6 +391,9 @@ fun TodayScreen(
                             BalanceSummaryCard(
                                 title = "网费",
                                 balanceValue = netSnapshot.data?.rawValue,
+                                serverMasked = netSnapshot.data?.isMasked == true,
+                                stateError = netSnapshot.error?.message,
+                                stale = netSnapshot.isStale,
                                 lastSuccessEpochMillis = netSnapshot.lastSuccessEpochMillis,
                                 isMasked = hideBalance,
                                 cardBg = colors.networkContainer,
@@ -400,10 +409,12 @@ fun TodayScreen(
                 HomeLayoutConfigManager.MODULE_RECENT_EXAMS -> {
                     // 最近考试摘要
                     val exams = examsSnapshot?.data.orEmpty()
+                    if (examsSnapshot?.error != null) SafeDataTag(text = "考试更新失败：${examsSnapshot.error?.message}")
+                    else if (examsSnapshot?.isStale == true) SafeDataTag(text = "考试摘要为上次同步数据")
                     if (exams.isNotEmpty()) {
                         val upcoming = exams.firstOrNull { it.arranged } ?: exams.first()
                         CampusSection(
-                            title = "最近考试",
+                            title = "考试摘要",
                             actionText = "查看全部 ›",
                             onActionClick = { AppNavigator.navigateTo(AppDestination.Exams) }
                         ) {
@@ -411,7 +422,7 @@ fun TodayScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { AppNavigator.navigateTo(AppDestination.ExamDetail(upcoming.courseName)) }
+                                        .clickable { AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, upcoming)) }
                                         .padding(vertical = 4.dp),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
@@ -441,7 +452,7 @@ fun TodayScreen(
                                         }
                                     }
                                     Text(
-                                        text = "${upcoming.timeDescription ?: "时间待定"} · ${upcoming.place ?: "考场待公布"}",
+                                        text = "${upcoming.timeDescription ?: "时间待定"} · ${upcoming.place ?: "地点未提供"}",
                                         fontSize = 13.sp,
                                         color = colors.textSecondary
                                     )
@@ -454,6 +465,8 @@ fun TodayScreen(
                 HomeLayoutConfigManager.MODULE_RECENT_TASKS -> {
                     // 待办事项摘要
                     val tasks = tasksSnapshot.data?.items.orEmpty()
+                    if (tasksSnapshot.error != null) SafeDataTag(text = "待办更新失败：${tasksSnapshot.error?.message}")
+                    else if (tasksSnapshot.isStale) SafeDataTag(text = "待办摘要为上次同步数据")
                     if (tasks.isNotEmpty()) {
                         CampusSection(
                             title = "待办事项 (${tasksSnapshot.data?.total ?: tasks.size})",
@@ -501,7 +514,7 @@ fun TodayScreen(
     conflictCourses?.let { conflicts ->
         OverlayBottomSheet(
             show = true,
-            title = "同时段课程安排 (${conflicts.size} 项)",
+            title = "课程列表 (${conflicts.size} 项)",
             onDismissRequest = { conflictCourses = null },
             endAction = {
                 Button(onClick = { conflictCourses = null }) { Text("关闭") }
@@ -514,7 +527,7 @@ fun TodayScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "当前时段存在多项排课，请选择具体课程查看详情：",
+                    text = "请选择具体课程查看详情：",
                     fontSize = 13.sp,
                     color = colors.textSecondary
                 )
@@ -599,6 +612,9 @@ private fun QuickActionItem(
 private fun BalanceSummaryCard(
     title: String,
     balanceValue: String?,
+    serverMasked: Boolean,
+    stateError: String?,
+    stale: Boolean,
     lastSuccessEpochMillis: Long?,
     isMasked: Boolean,
     cardBg: Color,
@@ -653,6 +669,7 @@ private fun BalanceSummaryCard(
             val hasValue = balanceValue != null
             val displayVal = when {
                 isMasked -> "¥ ••••"
+                serverMasked -> "学校已遮罩"
                 hasValue -> "¥ $balanceValue"
                 else -> "未同步"
             }
@@ -665,7 +682,7 @@ private fun BalanceSummaryCard(
             )
 
             Text(
-                text = "最近同步 ${TimeFormatter.formatTime(lastSuccessEpochMillis)}",
+                text = stateError ?: if (stale) "显示上次同步余额" else "最近同步 ${TimeFormatter.formatTime(lastSuccessEpochMillis)}",
                 fontSize = 11.sp,
                 color = colors.textSecondary
             )

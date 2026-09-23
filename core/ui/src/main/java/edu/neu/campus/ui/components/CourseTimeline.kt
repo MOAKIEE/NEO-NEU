@@ -21,7 +21,7 @@ import top.yukonga.miuix.kmp.basic.Text
 
 /**
  * 今日课程时间轴组件 (CourseTimeline)。
- * 严格遵照 docs/07-UI视觉与布局重设计.md 第 4.2 节规范：
+ * 组件约定：
  * - 集中放置在一个 Surface 分组中，替代重复卡片嵌套
  * - 时间列约 52dp、标记列 12dp、其余空间承载课程信息
  * - 标记点区分状态：已结束 (○)、进行中/待上课 (●)，垂直连线串联
@@ -32,6 +32,7 @@ import top.yukonga.miuix.kmp.basic.Text
 fun CourseTimeline(
     courses: List<CourseOccurrence>,
     nowTimeStr: String,
+    trusted: Boolean = true,
     onCourseClick: (CourseOccurrence) -> Unit,
     onSeeAllClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -66,14 +67,9 @@ fun CourseTimeline(
 
                     val b = course.beginTime
                     val e = course.endTime
-                    val isEnded = e != null && e < nowTimeStr
-                    val isOngoing = b != null && e != null && nowTimeStr >= b && nowTimeStr <= e
-
-                    val statusText = when {
-                        isOngoing -> "正在上课"
-                        isEnded -> "已结束"
-                        else -> "待上课"
-                    }
+                    val statusText = courseStatus(course, nowTimeStr, trusted)
+                    val isEnded = statusText == "已结束"
+                    val isOngoing = statusText == "正在上课"
 
                     val statusColor = when {
                         isOngoing -> colors.success

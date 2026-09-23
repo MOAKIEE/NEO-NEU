@@ -23,6 +23,7 @@ import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
 import edu.neu.campus.ui.theme.LocalCampusColors
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -35,6 +36,7 @@ fun GradeDetailScreen(
 ) {
     val campusColors = LocalCampusColors.current
     val academic = CampusDataProvider.academic
+    val scope = rememberCoroutineScope()
 
     // 从已有成绩列表中取得基本信息
     val gradesSnapshot by academic.grades(termId).collectAsState()
@@ -132,9 +134,9 @@ fun GradeDetailScreen(
                     CampusGroupDivider()
                     DetailRow(label = "考核学期", value = termId.ifBlank { "未指定" })
                     CampusGroupDivider()
-                    DetailRow(label = "考核性质", value = gradeItem?.retakeDescription ?: "初修")
+                    DetailRow(label = "考核性质", value = gradeItem?.retakeDescription ?: "未提供")
                     CampusGroupDivider()
-                    DetailRow(label = "通过说明", value = gradeItem?.passDescription ?: "正常考核")
+                    DetailRow(label = "通过说明", value = gradeItem?.passDescription ?: "未提供")
                 }
             }
 
@@ -186,6 +188,10 @@ fun GradeDetailScreen(
                 LoadStatePanel(isLoading = true)
             }
 
+            if (detailSnapshot?.error != null) {
+                LoadStatePanel(isLoading = false, error = detailSnapshot.error,
+                    onRetry = { scope.launch { academic.refreshGradeDetail(termId, sourceId) } })
+            }
             // 4. 来源与更新时间
             SafeDataTag(
                 sourceName = "教务系统",

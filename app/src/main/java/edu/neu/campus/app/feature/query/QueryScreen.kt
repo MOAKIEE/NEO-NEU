@@ -13,8 +13,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -44,22 +47,26 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 
 /**
  * 查询主页与功能目录。
- * 严格遵照 docs/07-UI视觉与布局重设计.md 第 6 节规范：
+ * 组件约定：
  * - 顶部统一搜索，支持名称、别名与拼音
  * - 学习查询：成绩与考试两张重点入口卡片（浅紫/浅橙，高度>=124dp，图标置上）
  * - 常用工具：一个 Surface 分组承载三列图标面板（每个图标底 48dp + 14sp 标签）
  * - 学校服务：独立列表卡片，注明“官方网页”，由用户主动前往浏览器
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun QueryScreen(
     modifier: Modifier = Modifier
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val isSearching = searchQuery.isNotBlank()
     val searchResults = remember(searchQuery) {
         if (isSearching) FeatureRegistry.search(searchQuery) else emptyList()
     }
     val colors = CampusTheme.colors
+    val fontScale = LocalDensity.current.fontScale
+    val compact = LocalConfiguration.current.screenWidthDp < 360 || fontScale >= 1.3f
+    val toolColumns = if (fontScale >= 1.5f) 1 else if (compact) 2 else 3
 
     Column(
         modifier = modifier
@@ -165,8 +172,10 @@ fun QueryScreen(
             ) {
                 // 1. 学习查询：两张重点入口卡片 (C 类浅色卡片，浅紫/浅橙)
                 CampusSection(title = "学习查询") {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
+                        maxItemsInEachRow = if (compact) 1 else 2,
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         // 成绩查询重点卡 (Light Purple)
@@ -205,7 +214,7 @@ fun QueryScreen(
                             ToolItem(FeatureRegistry.ID_TASKS, "待办申请", Icons.Default.CheckCircle, colors.messageForeground, colors.messageContainer)
                         )
 
-                        val chunked = tools.chunked(3)
+                        val chunked = tools.chunked(toolColumns)
                         chunked.forEachIndexed { rowIndex, rowItems ->
                             Row(
                                 modifier = Modifier
@@ -223,8 +232,8 @@ fun QueryScreen(
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
-                                if (rowItems.size < 3) {
-                                    repeat(3 - rowItems.size) {
+                                if (rowItems.size < toolColumns) {
+                                    repeat(toolColumns - rowItems.size) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }

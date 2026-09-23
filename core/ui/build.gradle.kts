@@ -17,6 +17,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     api(project(":core:contract"))
     api("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
     api("top.yukonga.miuix.kmp:miuix-preference-android:0.9.4")

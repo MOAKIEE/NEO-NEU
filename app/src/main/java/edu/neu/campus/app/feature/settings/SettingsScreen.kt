@@ -111,14 +111,14 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "东北大学在校生",
+                            text = "学校账号",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = campusColors.textPrimary
                         )
 
                         Text(
-                            text = if (sessionState.accountScope == null) "未登录学校账号" else "已登录学校账号",
+                            text = if (sessionState.portal == DomainStatus.READY || sessionState.academic == DomainStatus.READY) "学校连接可用" else "请查看下方连接状态",
                             fontSize = 13.sp,
                             color = campusColors.textSecondary
                         )
@@ -130,7 +130,7 @@ fun SettingsScreen(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "全日制本硕博在读",
+                                text = "校园信息查询",
                                 fontSize = 11.sp,
                                 color = campusColors.brand,
                                 fontWeight = FontWeight.Medium
@@ -315,7 +315,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "清除本地缓存数据",
+                            text = "退出并清除本地数据",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = campusColors.textPrimary
@@ -376,119 +376,23 @@ fun SettingsScreen(
         }
     }
 
-    // 退出确认对话框
-    if (showSignOutConfirm) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable { showSignOutConfirm = false }
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                insideMargin = PaddingValues(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = false) {}
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text(
-                        text = "退出登录确认",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = campusColors.textPrimary
-                    )
-                    Text(
-                        text = "退出后需要重新通过学校官方页面登录。",
-                        fontSize = 13.sp,
-                        color = campusColors.textPrimary,
-                        lineHeight = 20.sp
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                coroutineScope.launch {
-                                    CampusDataProvider.session.signOut()
-                                    showSignOutConfirm = false
-                                    Toast.makeText(context, "已安全退出当前账号", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColorsPrimary(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("确认退出")
-                        }
-                        Button(
-                            onClick = { showSignOutConfirm = false },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("取消")
-                        }
-                    }
+    top.yukonga.miuix.kmp.overlay.OverlayDialog(
+        show = showSignOutConfirm || showClearCacheConfirm,
+        title = "退出并清除本地数据",
+        summary = "将退出学校账号，清除本机学校会话和当前账号查询缓存。不会修改学校数据；再次查询需要重新登录。",
+        onDismissRequest = { showSignOutConfirm = false; showClearCacheConfirm = false }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = {
+                coroutineScope.launch {
+                    CampusDataProvider.session.signOut()
+                    showSignOutConfirm = false
+                    showClearCacheConfirm = false
+                    Toast.makeText(context, "已退出并清除本地数据", Toast.LENGTH_SHORT).show()
                 }
-            }
-        }
-    }
-
-    // 清除本地缓存确认对话框
-    if (showClearCacheConfirm) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable { showClearCacheConfirm = false }
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                insideMargin = PaddingValues(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = false) {}
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text(
-                        text = "清除缓存确认",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = campusColors.textPrimary
-                    )
-                    Text(
-                        text = "这将清除本机保存的离线课表和历史成绩，不会影响学校网站上的数据。清理后需联网重新获取。",
-                        fontSize = 13.sp,
-                        color = campusColors.textPrimary,
-                        lineHeight = 20.sp
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                coroutineScope.launch {
-                                    CampusDataProvider.session.signOut()
-                                    showClearCacheConfirm = false
-                                    Toast.makeText(context, "本地缓存已清理", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColorsPrimary(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("确认清除")
-                        }
-                        Button(
-                            onClick = { showClearCacheConfirm = false },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("取消")
-                        }
-                    }
-                }
-            }
+            }, modifier = Modifier.fillMaxWidth()) { Text("退出并清除") }
+            Button(onClick = { showSignOutConfirm = false; showClearCacheConfirm = false },
+                modifier = Modifier.fillMaxWidth()) { Text("取消") }
         }
     }
 }

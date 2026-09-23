@@ -15,10 +15,10 @@ sealed interface AppDestination {
     data object Grades : AppDestination
     data class GradeDetail(val termId: String, val sourceId: String) : AppDestination
     data object Exams : AppDestination
-    data class ExamDetail(val courseName: String) : AppDestination
+    data class ExamDetail(val termId: String, val exam: edu.neu.campus.contract.Exam) : AppDestination
     data class BalanceDetail(val kind: BalanceKind) : AppDestination
     data object Messages : AppDestination
-    data class MessageDetail(val messageId: String) : AppDestination
+    data class MessageDetail(val messageId: String, val page: Int = 1, val status: Int = 0) : AppDestination
     data object Tasks : AppDestination
     data class TaskDetail(val taskId: String) : AppDestination
     data object Schedule : AppDestination

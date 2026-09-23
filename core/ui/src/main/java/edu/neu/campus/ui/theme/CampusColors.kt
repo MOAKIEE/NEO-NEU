@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * NEO NEU 统一设计令牌 (Design Tokens)。
- * 严格遵照 docs/07-UI视觉与布局重设计.md 第 2 节规范：
+ * 组件约定：
  * - 校园蓝品牌色与独立深色表面层级
  * - 功能辅色及稳定的六组课程映射色彩
  * - 语义化状态色彩与文本对比度保证

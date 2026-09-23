@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import edu.neu.campus.app.navigation.AppDestination
@@ -36,22 +37,14 @@ fun MainScreen(
         AppNavigator.popBack()
     }
 
-    if (destination != AppDestination.Main) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.background)
-                .statusBarsPadding()
-        ) {
-            subScreen(destination)
-        }
-    } else {
+    val stateHolder = rememberSaveableStateHolder()
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .background(colors.background)
                 .statusBarsPadding(),
             bottomBar = {
+                if (destination == AppDestination.Main) {
                 val navItemColors = NavigationBarDefaults.navigationBarItemColors(
                     selectedContentColor = colors.brand,
                     unselectedContentColor = colors.textSecondary
@@ -90,6 +83,7 @@ fun MainScreen(
                         colors = navItemColors
                     )
                 }
+                }
             }
         ) { paddingValues ->
             Column(
@@ -98,29 +92,18 @@ fun MainScreen(
                     .padding(paddingValues)
             ) {
                 Box(modifier = Modifier.weight(1f)) {
-                    // 保留四个 Tab 的状态与滚动位置
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = currentTab == MainTab.TODAY
-                    ) {
-                        todayScreen()
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = currentTab == MainTab.TIMETABLE
-                    ) {
-                        timetableScreen()
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = currentTab == MainTab.QUERY
-                    ) {
-                        queryScreen()
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = currentTab == MainTab.SETTINGS
-                    ) {
-                        settingsScreen()
+                    val stateKey = if (destination == AppDestination.Main) "tab:$currentTab" else "page:$destination"
+                    stateHolder.SaveableStateProvider(stateKey) {
+                        if (destination != AppDestination.Main) {
+                            Box(Modifier.navigationBarsPadding().imePadding()) { subScreen(destination) }
+                        } else when (currentTab) {
+                            MainTab.TODAY -> todayScreen()
+                            MainTab.TIMETABLE -> timetableScreen()
+                            MainTab.QUERY -> queryScreen()
+                            MainTab.SETTINGS -> settingsScreen()
+                        }
                     }
                 }
             }
         }
-    }
 }

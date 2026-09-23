@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,8 +39,7 @@ import top.yukonga.miuix.kmp.basic.Text
 
 enum class MessageSourceFilter(val label: String) {
     ALL("全部来源"),
-    PORTAL("门户系统"),
-    ACADEMIC("教务系统")
+    PORTAL("门户系统")
 }
 
 enum class MessageStatusFilter(val label: String) {
@@ -55,10 +55,16 @@ fun MessagesScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val campusColors = LocalCampusColors.current
-    val messagesSnapshot by CampusDataProvider.portal.messages(page = 1, pageSize = 30).collectAsState()
-
-    var sourceFilter by remember { mutableStateOf(MessageSourceFilter.ALL) }
-    var statusFilter by remember { mutableStateOf(MessageStatusFilter.ALL) }
+    var sourceFilter by rememberSaveable { mutableStateOf(MessageSourceFilter.ALL) }
+    var statusFilter by rememberSaveable { mutableStateOf(MessageStatusFilter.ALL) }
+    var page by rememberSaveable { mutableStateOf(1) }
+    val status = when (statusFilter) {
+        MessageStatusFilter.ALL -> 0
+        MessageStatusFilter.UNREAD -> 2
+        MessageStatusFilter.READ -> 1
+    }
+    val messagesSnapshot by CampusDataProvider.portal.messages(page, 30, status).collectAsState()
+    LaunchedEffect(page, status) { CampusDataProvider.portal.refreshMessages(page, 30, status) }
 
     val isRefreshing = messagesSnapshot.phase == QueryPhase.LOADING
     val allMessages = messagesSnapshot.data?.items ?: emptyList()
@@ -66,12 +72,7 @@ fun MessagesScreen(
     // 筛选消息
     val filteredMessages = remember(allMessages, sourceFilter, statusFilter) {
         allMessages.filter { msg ->
-            val src = msg.source.orEmpty()
-            val matchSource = when (sourceFilter) {
-                MessageSourceFilter.ALL -> true
-                MessageSourceFilter.PORTAL -> src.isBlank() || src.contains("门户") || src.contains("portal")
-                MessageSourceFilter.ACADEMIC -> src.contains("教务") || src.contains("academic")
-            }
+            val matchSource = true // Only the portal source is currently integrated.
 
             val matchStatus = when (statusFilter) {
                 MessageStatusFilter.ALL -> true
@@ -95,7 +96,7 @@ fun MessagesScreen(
                 IconButton(
                     onClick = {
                         coroutineScope.launch {
-                            CampusDataProvider.portal.refreshMessages(page = 1, pageSize = 30)
+                            CampusDataProvider.portal.refreshMessages(page, 30, status)
                         }
                     },
                     enabled = !isRefreshing
@@ -148,12 +149,20 @@ fun MessagesScreen(
                     FilterChip(
                         label = f.label,
                         isSelected = f == statusFilter,
-                        onClick = { statusFilter = f }
+                        onClick = { statusFilter = f; page = 1 }
                     )
                 }
             }
         }
 
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            top.yukonga.miuix.kmp.basic.Button(onClick = { page-- }, enabled = page > 1 && !isRefreshing) { Text("上一页") }
+            Text("第 $page 页 · 门户")
+            val total = messagesSnapshot.data?.total
+            val hasNext = if (total != null) page * 30 < total else allMessages.size == 30
+            top.yukonga.miuix.kmp.basic.Button(onClick = { page++ }, enabled = hasNext && !isRefreshing) { Text("下一页") }
+        }
+        if (messagesSnapshot.isStale) SafeDataTag(text = "显示上次同步消息，可能已变化")
         // 消息列表与状态展示
         Box(
             modifier = Modifier
@@ -161,7 +170,7 @@ fun MessagesScreen(
                 .fillMaxWidth()
         ) {
             when {
-                messagesSnapshot.phase == QueryPhase.LOADING && allMessages.isEmpty() -> {
+                messagesSnapshot.phase in listOf(QueryPhase.IDLE, QueryPhase.LOADING) && messagesSnapshot.data == null -> {
                     LoadStatePanel(isLoading = true)
                 }
                 messagesSnapshot.phase == QueryPhase.FAILED && allMessages.isEmpty() -> {
@@ -170,7 +179,7 @@ fun MessagesScreen(
                         error = messagesSnapshot.error,
                         onRetry = {
                             coroutineScope.launch {
-                                CampusDataProvider.portal.refreshMessages(page = 1, pageSize = 30)
+                                CampusDataProvider.portal.refreshMessages(page, 30, status)
                             }
                         }
                     )
@@ -192,7 +201,7 @@ fun MessagesScreen(
                                 message = msg,
                                 onClick = {
                                     MessagesManager.markAsLocalRead(msg.id)
-                                    AppNavigator.navigateTo(AppDestination.MessageDetail(msg.id))
+                                    AppNavigator.navigateTo(AppDestination.MessageDetail(msg.id, page, status))
                                 }
                             )
                         }

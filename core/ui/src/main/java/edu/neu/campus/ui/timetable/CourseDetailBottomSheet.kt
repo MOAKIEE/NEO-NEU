@@ -21,7 +21,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 
 /**
  * 课程详情抽屉 (CourseDetailBottomSheet)。
- * 严格遵照 docs/07-UI视觉与布局重设计.md 第 5 节规范：
+ * 组件约定：
  * - 顶部细色条与课块颜色一致
  * - 依次展示时间节次、上课地点与校区、任课教师、学校排课安排说明及其他时段排课
  * - 来源与同步时间严格遵循只读真实数据口径

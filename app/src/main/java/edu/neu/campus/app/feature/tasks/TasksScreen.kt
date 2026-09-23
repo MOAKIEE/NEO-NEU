@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,8 +54,10 @@ fun TasksScreen(
     val coroutineScope = rememberCoroutineScope()
     val campusColors = LocalCampusColors.current
 
-    var activeTab by remember { mutableStateOf(TaskKind.TODO) }
+    var activeTab by rememberSaveable { mutableStateOf(TaskKind.TODO) }
     var inspectingTask by remember { mutableStateOf<CampusTask?>(null) }
+
+    LaunchedEffect(activeTab) { CampusDataProvider.portal.refreshTasks(activeTab, 1, 20) }
 
     // 观察当前选中的任务种类数据
     val tasksSnapshot by CampusDataProvider.portal.tasks(kind = activeTab, page = 1, pageSize = 20).collectAsState()
@@ -85,6 +88,8 @@ fun TasksScreen(
                 }
             }
         )
+
+        if (tasksSnapshot.isStale) SafeDataTag(text = "显示上次同步待办，可能已变化")
 
         // 分段切换胶囊：待办事项 / 已办事项 / 我的申请
         Row(
@@ -131,11 +136,11 @@ fun TasksScreen(
 
             when {
                 // 特殊错误处理：SCHEMA_CHANGED
-                error?.kind == QueryErrorKind.SCHEMA_CHANGED -> {
+                error?.kind == QueryErrorKind.SCHEMA_CHANGED && tasksSnapshot.data == null -> {
                     SchemaChangedCard(context = context)
                 }
 
-                tasksSnapshot.phase == QueryPhase.LOADING && taskList.isEmpty() -> {
+                tasksSnapshot.phase in listOf(QueryPhase.IDLE, QueryPhase.LOADING) && taskList.isEmpty() -> {
                     LoadStatePanel(isLoading = true)
                 }
 

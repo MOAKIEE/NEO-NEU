@@ -29,20 +29,16 @@ import top.yukonga.miuix.kmp.basic.Text
 
 @Composable
 fun ExamDetailScreen(
-    courseName: String,
+    termId: String,
+    selectedExam: Exam,
     onBack: () -> Unit
 ) {
     val campusColors = LocalCampusColors.current
     val academic = CampusDataProvider.academic
 
-    val termsSnapshot by academic.terms().collectAsState()
-    val currentTerm = termsSnapshot.data?.firstOrNull { it.isCurrent } ?: termsSnapshot.data?.firstOrNull()
-
-    val examsSnapshot = if (currentTerm != null) {
-        academic.exams(currentTerm.id).collectAsState().value
-    } else null
-
-    val exam = examsSnapshot?.data?.firstOrNull { it.courseName == courseName }
+    val examsSnapshot by academic.exams(termId).collectAsState()
+    val exam = examsSnapshot.data?.firstOrNull { it == selectedExam }
+    val courseName = selectedExam.courseName
 
     Column(
         modifier = Modifier
@@ -54,6 +50,10 @@ fun ExamDetailScreen(
             onBack = onBack
         )
 
+        if (exam == null) {
+            Text("该考试记录已不可用，请返回所选学期重新查询。", modifier = Modifier.padding(20.dp))
+            return
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -88,7 +88,7 @@ fun ExamDetailScreen(
                                 .padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
                             Text(
-                                text = if (isArranged) "已统考排考" else "尚未排考/随堂",
+                                text = if (isArranged) "已安排" else "未安排",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isArranged) campusColors.examText else campusColors.textSecondary
@@ -118,7 +118,7 @@ fun ExamDetailScreen(
                                     color = campusColors.textSecondary
                                 )
                                 Text(
-                                    text = exam.place ?: "尚未公布",
+                                    text = exam.place ?: "未提供",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = campusColors.textPrimary,
@@ -140,7 +140,7 @@ fun ExamDetailScreen(
                                     color = campusColors.examText.copy(alpha = 0.8f)
                                 )
                                 Text(
-                                    text = exam.seat?.let { "$it 座" } ?: "无",
+                                    text = exam.seat?.let { "$it 座" } ?: "未提供",
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = campusColors.examText,
@@ -155,20 +155,20 @@ fun ExamDetailScreen(
             // 2. 考试安排详情分组
             CampusSection(title = "安排信息") {
                 CampusGroup {
-                    DetailRow(label = "考试时间", value = exam?.timeDescription ?: "待学校统一公布")
+                    DetailRow(label = "考试时间", value = exam?.timeDescription ?: "未提供")
                     CampusGroupDivider()
-                    DetailRow(label = "考场地点", value = exam?.place ?: "尚未公布")
+                    DetailRow(label = "考场地点", value = exam?.place ?: "未提供")
                     CampusGroupDivider()
                     DetailRow(label = "考场座位", value = exam?.seat ?: "未指定")
                     CampusGroupDivider()
-                    DetailRow(label = "考查状态", value = exam?.status ?: "正常")
+                    DetailRow(label = "考查状态", value = exam?.status ?: "未提供")
                 }
             }
 
             // 3. 来源说明
             SafeDataTag(
                 sourceName = "教务系统",
-                lastSuccessEpochMillis = examsSnapshot?.lastSuccessEpochMillis,
+                lastSuccessEpochMillis = examsSnapshot.lastSuccessEpochMillis,
                 modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
             )
         }

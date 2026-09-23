@@ -158,6 +158,7 @@ fun BalanceDetailScreen(
                     val unitVal = balanceSnapshot.data?.unit ?: "元"
                     val displayValue = when {
                         isMasked -> "••••"
+                        balanceSnapshot.data?.isMasked == true -> "学校已遮罩"
                         rawVal != null -> rawVal
                         balanceSnapshot.phase == QueryPhase.LOADING -> "同步中..."
                         else -> "--.--"
@@ -199,78 +200,14 @@ fun BalanceDetailScreen(
                 }
             }
 
-            // 2. 账户信息分组
-            CampusSection(title = "账户详情") {
+            CampusSection(title = "数据说明") {
                 CampusGroup {
-                    if (isCard) {
-                        InfoRow(label = "卡片状态", value = "正常在用")
-                        CampusGroupDivider()
-                        InfoRow(label = "账户类型", value = "学生主账户")
-                        CampusGroupDivider()
-                        InfoRow(label = "主要用途", value = "食堂就餐、超市商铺、校医院、图书馆门禁借阅")
-                        CampusGroupDivider()
-                        InfoRow(
-                            label = "流水说明",
-                            value = "消费流水明细请前往各食堂一楼自助圈存机或后勤一卡通综合服务大厅查询。"
-                        )
-                    } else {
-                        InfoRow(label = "服务状态", value = "正常在线")
-                        CampusGroupDivider()
-                        InfoRow(label = "接入类型", value = "学生宿舍区万兆/教学区无线认证网络")
-                        CampusGroupDivider()
-                        InfoRow(label = "计费方式", value = "学生包月/包学期优惠标准")
-                        CampusGroupDivider()
-                        InfoRow(
-                            label = "安全提示",
-                            value = "修改网关连接密码、解绑终端 MAC 地址请访问校园网综合自服务大厅。"
-                        )
+                    Text("当前仅提供余额查询，不代表卡片状态、网络在线状态或套餐信息。", color = campusColors.textSecondary)
+                    if (balanceSnapshot.data?.isMasked == true) {
+                        Text("学校未提供明文余额", color = campusColors.textSecondary)
                     }
-                }
-            }
-
-            // 3. 充值与服务指引分组
-            CampusSection(title = "充值途径与安全指引") {
-                CampusGroup {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "本应用仅供查询余额，不保存支付密码，也不能在此充值或付款。",
-                            fontSize = 12.sp,
-                            color = campusColors.textSecondary,
-                            lineHeight = 18.sp
-                        )
-
-                        if (isCard) {
-                            Text(
-                                text = "官方充值途径：\n1. 微信/支付宝搜索关注“东大一卡通”或“东北大学财务处”公众号进行线上充值。\n2. 各校区食堂入口、学生活动中心及后勤大厅的多功能自助圈存机进行转账圈存。",
-                                fontSize = 13.sp,
-                                color = campusColors.textPrimary,
-                                lineHeight = 19.sp
-                            )
-                        } else {
-                            Text(
-                                text = "官方网费续费途径：\n1. 通过“东大一卡通”向校园卡充值后，在圈存机转账至网费账户。\n2. 登录东北大学网络自服务系统 (ipgw.neu.edu.cn) 在线划转续费。",
-                                fontSize = 13.sp,
-                                color = campusColors.textPrimary,
-                                lineHeight = 19.sp
-                            )
-
-                            Button(
-                                onClick = {
-                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    cm.setPrimaryClip(ClipData.newPlainText("URL", "http://ipgw.neu.edu.cn"))
-                                    Toast.makeText(context, "网址已复制到剪贴板", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColorsPrimary(),
-                                modifier = Modifier.padding(top = 4.dp)
-                            ) {
-                                Text("复制校园网自服务网址")
-                            }
-                        }
+                    balanceSnapshot.data?.sourceUpdatedAt?.let {
+                        Text("学校更新于 $it", color = campusColors.textSecondary)
                     }
                 }
             }

@@ -48,6 +48,26 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CampusTheme {
+                val session by CampusDataProvider.session.state.collectAsState()
+                LaunchedEffect(session.accountScope, session.academic == edu.neu.campus.contract.DomainStatus.READY) {
+                    if (session.academic == edu.neu.campus.contract.DomainStatus.READY) {
+                        val repo = CampusDataProvider.academic
+                        repo.refreshTerms()
+                        repo.terms().value.data?.firstOrNull { it.isCurrent }?.let { term ->
+                            repo.refreshWeeks(term.id)
+                            repo.weeks(term.id).value.data?.firstOrNull { it.isCurrent }?.let { week ->
+                                repo.refreshTimetable(term.id, week.number)
+                            }
+                        }
+                    }
+                }
+                LaunchedEffect(session.accountScope, session.portal == edu.neu.campus.contract.DomainStatus.READY) {
+                    if (session.portal == edu.neu.campus.contract.DomainStatus.READY) {
+                        CampusDataProvider.portal.refreshBalance(edu.neu.campus.contract.BalanceKind.CAMPUS_CARD)
+                        CampusDataProvider.portal.refreshBalance(edu.neu.campus.contract.BalanceKind.NETWORK)
+                    }
+                }
+                key(session.accountScope) {
                 MainScreen(
                     todayScreen = {
                         TodayScreen(onLoginClick = { launchLogin() })
@@ -92,14 +112,15 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is AppDestination.ExamDetail -> {
-                                if (dest.courseName.isBlank()) {
+                                if (dest.termId.isBlank()) {
                                     ExamsScreen(
                                         onBack = { AppNavigator.popBack() },
                                         onLoginClick = { launchLogin() }
                                     )
                                 } else {
                                     ExamDetailScreen(
-                                        courseName = dest.courseName,
+                                        termId = dest.termId,
+                                        selectedExam = dest.exam,
                                         onBack = { AppNavigator.popBack() }
                                     )
                                 }
@@ -123,6 +144,8 @@ class MainActivity : ComponentActivity() {
                                 } else {
                                     edu.neu.campus.app.feature.messages.MessageDetailScreen(
                                         messageId = dest.messageId,
+                                        page = dest.page,
+                                        status = dest.status,
                                         onBack = { AppNavigator.popBack() }
                                     )
                                 }
@@ -161,6 +184,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 )
+                }
             }
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,11 +51,12 @@ fun ExamsScreen(
 
     val termsSnapshot by academic.terms().collectAsState()
     val terms = termsSnapshot.data.orEmpty()
-    var selectedTerm by remember { mutableStateOf<Term?>(null) }
+    var selectedTermId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedTerm = terms.firstOrNull { it.id == selectedTermId }
 
     LaunchedEffect(terms) {
         if (selectedTerm == null && terms.isNotEmpty()) {
-            selectedTerm = terms.firstOrNull { it.isCurrent } ?: terms.first()
+            selectedTermId = (terms.firstOrNull { it.isCurrent } ?: terms.first()).id
         }
     }
 
@@ -74,7 +76,7 @@ fun ExamsScreen(
         academic.refreshExams(termId)
     }
 
-    var selectedTab by remember { mutableStateOf(ExamTab.ARRANGED) }
+    var selectedTab by rememberSaveable { mutableStateOf(ExamTab.ARRANGED) }
     var showTermPicker by remember { mutableStateOf(false) }
 
     val rawExams = examsSnapshot?.data.orEmpty()
@@ -183,6 +185,10 @@ fun ExamsScreen(
                 }
             }
 
+            if (termsSnapshot.error != null) item {
+                LoadStatePanel(false, error = termsSnapshot.error,
+                    onRetry = { coroutineScope.launch { academic.refreshTerms() } }, onLogin = onLoginClick)
+            }
             // 3. 错误与加载处理
             if (examsSnapshot != null && (examsSnapshot.phase == QueryPhase.LOADING || examsSnapshot.phase == QueryPhase.FAILED)) {
                 item {
@@ -218,7 +224,7 @@ fun ExamsScreen(
                                         color = campusColors.textPrimary
                                     )
                                     Text(
-                                        text = "学校尚未公布具体排考，请留意教务通知或查看“未安排”选项",
+                                        text = "当前查询未返回已安排考试，可查看“未安排”选项",
                                         fontSize = 13.sp,
                                         color = campusColors.textSecondary,
                                         modifier = Modifier.padding(top = 6.dp)
@@ -232,7 +238,7 @@ fun ExamsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        AppNavigator.navigateTo(AppDestination.ExamDetail(exam.courseName))
+                                        AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, exam))
                                     },
                                 insideMargin = PaddingValues(16.dp)
                             ) {
@@ -334,7 +340,7 @@ fun ExamsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        AppNavigator.navigateTo(AppDestination.ExamDetail(exam.courseName))
+                                        AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, exam))
                                     },
                                 insideMargin = PaddingValues(16.dp)
                             ) {
@@ -403,7 +409,7 @@ fun ExamsScreen(
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) campusColors.brandContainer else campusColors.surfaceMuted)
                             .clickable {
-                                selectedTerm = t
+                                selectedTermId = t.id
                                 showTermPicker = false
                             }
                             .padding(14.dp),
