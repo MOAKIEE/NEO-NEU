@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import edu.neu.campus.app.config.HomeLayoutConfigManager
@@ -22,10 +21,9 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.authweb.OfficialLogin
 import edu.neu.campus.ui.theme.CampusTheme
+import edu.neu.campus.ui.theme.ThemeManager
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
 
 class MainActivity : ComponentActivity() {
 
@@ -38,6 +36,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CampusDataProvider.init(this)
+        ThemeManager.init(this)
         HomeLayoutConfigManager.init(this)
         edu.neu.campus.app.feature.balance.BalancePrivacyManager.init(this)
         edu.neu.campus.app.feature.messages.MessagesManager.init(this)
@@ -168,12 +167,5 @@ class MainActivity : ComponentActivity() {
 
     private fun launchLogin() {
         loginLauncher.launch(OfficialLogin.intent(this))
-    }
-}
-
-@Composable
-private fun PlaceholderPage(title: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = title, fontSize = 20.sp)
     }
 }
