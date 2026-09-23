@@ -1,10 +1,12 @@
 # NEO NEU 前端实现说明
 
-更新日期：2026-09-23。记录 Miuix 界面重构及审查修复后的当前实现。构建、真实样本与待验收事项统一维护在 [验证清单](../04-验证与发布清单.md)。旧布局、重构方案及单独审查记录已移除，历史版本可通过 Git 查阅。
+更新日期：2026-09-23。记录 Miuix 界面重构（含本轮界面与动效重构）及审查修复后的当前实现。构建、真实样本与待验收事项统一维护在 [验证清单](../04-验证与发布清单.md)；设计令牌、组件与动效约定见[界面设计系统与动效](../05-界面设计系统与动效.md)。旧布局、重构方案及单独审查记录已移除，历史版本可通过 Git 查阅。
 
 ## 界面维护约束
 
 UI 库固定使用 Miuix，基础控件、导航和弹层优先复用项目封装；课表、时间轴等业务组件可用 Compose 自定义布局。保持今日、课表、查询、我的四栏结构，颜色集中在 CampusColors/ThemeManager，避免另起一套 Material UI 或散落硬编码配色。深浅色、大字体、数据加载和失败状态应与功能一同维护。
+
+页面内不直接写圆角、间距与动画曲线：分别取自 `CampusShapes`、`CampusSpacing`、`CampusMotion`。图标统一使用 Miuix 图标库（`MiuixIcons.Regular.*` 与 `MiuixIcons.Basic.*`），不引入 `androidx.compose.material.icons`。点击反馈统一用 `Modifier.tapScale`，圆角通过其 `clipShape` 传入。
 
 视觉参考：[THU Info 仓库](https://github.com/thu-info-community/thu-info-app)。仅参考功能组织、课程配色和信息层级，不复制品牌素材、源码或学校业务能力；本项目保持 Kotlin + Compose + Miuix。
 
@@ -27,13 +29,19 @@ UI 库固定使用 Miuix，基础控件、导航和弹层优先复用项目封�
 
 | 位置 | 当前职责 |
 | --- | --- |
-| MainActivity / MainScreen / navigation | 官方认证入口、四栏导航、详情路由；所有页面位于 Miuix Scaffold 下，共用弹层宿主 |
+| MainActivity / MainScreen / navigation | 官方认证入口、四栏导航、详情路由；所有页面位于 Miuix Scaffold 下，共用弹层宿主。MainScreen 负责标签与二级路由转场 |
 | CampusDataProvider | 只装配真实 CampusData；演示仓库和切换入口已删除 |
 | registry/FeatureRegistry | 稳定功能 ID、分类、名称/别名/拼音搜索 |
 | config/HomeLayoutConfig | 首页快捷入口、模块显示和顺序，本机 SharedPreferences |
-| theme/CampusColors、ThemeManager | 品牌色、功能色、课程色、系统/浅色/深色主题 |
-| components/CampusGroup、HeroCourseCard、CourseTimeline | 分组容器、主课程卡与课程时间轴 |
+| theme/CampusColors、ThemeManager | 品牌色、功能色、课程色、系统/浅色/深色主题；补全 Miuix Colors 全部语义槽位 |
+| theme/CampusMotion | 动效时长、缓动、弹簧预设与交错延迟；CampusShapes/CampusSpacing 提供圆角与间距 |
+| components/CampusCard、CampusGroup、CampusSection、CampusRow | 卡片、分组容器与列表项，页面不再自绘卡片 |
+| components/CampusChips、CampusSegmented | 筛选胶囊、抽屉选择行与分段控件 |
+| components/CampusMotion（Modifier.tapScale、StaggeredAppear、CampusPageEnter、ShimmerLine） | 按压反馈、交错入场、整页入场与骨架屏 |
+| components/HeroCourseCard、CourseTimeline | 首页品牌主课程卡与今日课程时间轴 |
+| components/LoadStatePanel、SafeDataTag、QueryCard、Controls | 状态面板、来源标注、信息卡与开关 |
 | components/CoursePresentation、SchoolClock | 可测试的课程时间判断、学校时区分钟时钟 |
+| components/AnimatedNumber | 余额与绩点的数字滚动呈现 |
 | timetable/TimetableGrid | 动态节次、跨节课程块、真正重叠的安排集合；不硬编码作息时间 |
 | feature/* | 首页、查询与业务页面；余额隐私、消息本机阅读与主题偏好保存在本机 |
 
@@ -56,6 +64,8 @@ UI 库固定使用 Miuix，基础控件、导航和弹层优先复用项目封�
 
 `SaveableStateHolder` 按主标签/详情路由隔离保存状态，筛选、查询词、学期 ID、周次、校区及列表模式使用可保存状态；滚动组件参与 Compose 保存机制。账号作用域变化时重建页面保存容器，避免旧作用域状态沿用。官方登录返回后复验连接，已连接的教务/门户触发对应数据恢复。
 
+主框架对标签与二级路由分别提供转场动画；二级页面统一用 `CampusPageEnter` 做挂载入场，列表首屏用 `StaggeredAppear` 逐项出现。骨架屏仅在真实加载态出现，空结果与失败不渲染为占位形状。
+
 首页快捷区和余额区、查询重点入口与工具面板根据窄屏/字体放大调整列数；课表大字体切列表。详情补充系统底部安全区及键盘避让。此处记录实现机制，尚不是旋转、进程恢复、所有大字体及真机手势验收通过。
 
 ## 验证与继续工作
@@ -66,6 +76,6 @@ UI 库固定使用 Miuix，基础控件、导航和弹层优先复用项目封�
 
 输出：`app/build/outputs/apk/debug/app-debug.apk`。核心课程逻辑新增 JUnit 回归测试，覆盖时间缺失/边界/过期数据、相邻与重叠节次及跨节分组；测试不依赖真实个人数据。
 
-当前 adb 没有连接设备。本轮未完成正式 App 逐页截图、官方登录端到端、TalkBack、后台预览隐私和 release 真机性能验收。未实现或仍需完善的界面事项包括：独立欢迎页、标题折叠、外观缩略预览、后台预览隐私设置及完整宽屏排版。当前实现不代表全部界面需求已经验收。
+当前 adb 没有连接设备。本轮只验证了编译与单元测试通过，**未在真机或模拟器上核对视觉与动效**：标签与路由转场、按压反馈、骨架屏、数字滚动、交错入场的实际观感均待设备确认。同样未完成正式 App 逐页截图、官方登录端到端、TalkBack、后台预览隐私和 release 真机性能验收。未实现或仍需完善的界面事项包括：独立欢迎页、标题折叠、外观缩略预览、后台预览隐私设置及完整宽屏排版。当前实现不代表全部界面需求已经验收。
 
-新增入口继续使用 FeatureRegistry 与稳定路由；新增首页模块默认关闭，保留用户配置。真实数据能力变更须同步更新契约、适配、测试和数据交接。
+新增入口继续使用 FeatureRegistry 与稳定路由；新增首页模块默认关闭，保留用户配置。真实数据能力变更须同步更新契约、适配、测试和数据交接；界面新增与调整遵循[界面设计系统与动效](../05-界面设计系统与动效.md)。

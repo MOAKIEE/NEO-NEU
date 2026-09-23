@@ -57,7 +57,7 @@ dependencies {
 
 Miuix `NavigationBar` 支持 2—5 项，四项导航符合组件能力。`OverlayBottomSheet` 等 Overlay 组件依赖 Miuix `Scaffold` 提供的 PopupHost；仅使用同名 Material Scaffold 不能假设可替代。
 
-当前 `core/ui` 已提供品牌与功能色 `CampusColors`、Miuix 主题、`CampusGroup`、`HeroCourseCard`、`CourseTimeline`、`QueryCard`、`LoadStatePanel`、课表网格与课程详情抽屉。主页面与详情页共用 Miuix Scaffold/PopupHost；退出确认使用 OverlayDialog。升级实验性 Miuix API 时应检查使用它的页面。
+当前 `core/ui` 已提供设计令牌 `CampusColors`／`CampusMotion`／`CampusShapes`／`CampusSpacing`、Miuix 主题映射，通用组件 `CampusCard`、`CampusGroup`／`CampusSection`、`CampusRow`、`CampusIconBadge`／`CampusPill`、`CampusFilterChip`／`CampusSelectionRow`、`CampusSegmentedControl`、`AnimatedNumber`、`CampusTopBar`、`LoadStatePanel`、`QueryCard`、`CampusSwitch`／`CampusCheckbox`，动效工具 `Modifier.tapScale`、`StaggeredAppear`、`CampusPageEnter`、`ShimmerLine`，以及业务组件 `HeroCourseCard`、`CourseTimeline`、课表网格与课程详情抽屉。主页面与详情页共用 Miuix Scaffold/PopupHost；退出确认使用 OverlayDialog。图标统一取自 Miuix 图标库，不再使用 Material Icons。清单见[界面设计系统](05-界面设计系统与动效.md)；升级实验性 Miuix API 时应检查使用它的页面。
 
 ## 客户端架构
 
