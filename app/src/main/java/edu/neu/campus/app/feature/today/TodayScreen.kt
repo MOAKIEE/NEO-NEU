@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,9 +26,8 @@ import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.app.registry.FeatureRegistry
 import edu.neu.campus.contract.*
-import edu.neu.campus.ui.components.QueryCard
-import edu.neu.campus.ui.components.SafeDataTag
-import edu.neu.campus.ui.components.TimeFormatter
+import edu.neu.campus.ui.components.*
+import edu.neu.campus.ui.theme.CampusTheme
 import edu.neu.campus.ui.timetable.CourseDetailBottomSheet
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
@@ -36,7 +36,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -48,6 +48,7 @@ fun TodayScreen(
     val academic = CampusDataProvider.academic
     val portal = CampusDataProvider.portal
     val session = CampusDataProvider.session
+    val colors = CampusTheme.colors
 
     val sessionState by session.state.collectAsState()
     val termsSnapshot by academic.terms().collectAsState()
@@ -121,7 +122,7 @@ fun TodayScreen(
         arrangedCourses.filter { it.dayOfWeek == todayDayOfWeek }.sortedBy { it.beginSection }
     }
 
-    // 计算当前课程/下一节课
+    // 计算当前时间字符串 (HH:mm)
     val nowTimeStr = remember {
         SimpleDateFormat("HH:mm", Locale.SIMPLIFIED_CHINESE).apply {
             timeZone = TimeZone.getTimeZone("Asia/Shanghai")
@@ -129,16 +130,18 @@ fun TodayScreen(
     }
 
     var inspectingCourse by remember { mutableStateOf<CourseOccurrence?>(null) }
+    var conflictCourses by remember { mutableStateOf<List<CourseOccurrence>?>(null) }
     val hideBalance = edu.neu.campus.app.feature.balance.BalancePrivacyManager.isBalanceMasked
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(colors.background)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // 1. 顶部标题区：左侧“今日”，右侧消息入口与红点
+        // 1. 顶部标题区：标题 28sp Bold，日期 TextSecondary，右侧 48dp 消息按钮带圆底
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -148,14 +151,16 @@ fun TodayScreen(
                 Text(
                     text = "今日",
                     fontSize = 28.sp,
+                    lineHeight = 34.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = colors.textPrimary
                 )
                 val weekText = if (currentWeek != null) " · 第 ${currentWeek.number} 教学周" else ""
                 Text(
                     text = "$todayDateStr$weekText",
                     fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                    lineHeight = 20.sp,
+                    color = colors.textSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -164,13 +169,14 @@ fun TodayScreen(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
+                    .background(colors.surface)
                     .clickable { AppNavigator.navigateTo(AppDestination.Messages) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Notifications,
                     contentDescription = "消息中心",
-                    tint = MiuixTheme.colorScheme.onSurface,
+                    tint = colors.textPrimary,
                     modifier = Modifier.size(24.dp)
                 )
                 if (hasUnreadMessage) {
@@ -179,20 +185,23 @@ fun TodayScreen(
                             .size(9.dp)
                             .align(Alignment.TopEnd)
                             .offset(x = (-8).dp, y = 8.dp)
-                            .background(Color(0xFFE53935), CircleShape)
+                            .clip(CircleShape)
+                            .background(colors.error)
                     )
                 }
             }
         }
 
-        // 2. 必要状态条（离线或会话失效时展示）
+        // 2. 状态提示条（会话失效或离线旧缓存时呈现）
         if (sessionState.portal == DomainStatus.EXPIRED || sessionState.academic == DomainStatus.EXPIRED ||
             sessionState.portal == DomainStatus.SIGNED_OUT || sessionState.academic == DomainStatus.SIGNED_OUT
         ) {
-            Card(
-                colors = CardDefaults.defaultColors(),
-                insideMargin = PaddingValues(14.dp),
-                modifier = Modifier.fillMaxWidth()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.surface)
+                    .padding(14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -208,27 +217,27 @@ fun TodayScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFE53935).copy(alpha = 0.12f)),
+                                .background(colors.error.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = null,
-                                tint = Color(0xFFE53935),
+                                tint = colors.error,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = "学校账号需要认证",
+                                text = "学校账号需要重新认证",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MiuixTheme.colorScheme.onSurface
+                                color = colors.textPrimary
                             )
                             Text(
                                 text = "会话已过期，重新登录以同步课表与数据",
                                 fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                color = colors.textSecondary
                             )
                         }
                     }
@@ -237,7 +246,7 @@ fun TodayScreen(
                         onClick = onLoginClick,
                         colors = ButtonDefaults.buttonColorsPrimary()
                     ) {
-                        Text("前往登录")
+                        Text("登录")
                     }
                 }
             }
@@ -245,25 +254,28 @@ fun TodayScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainer)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.surfaceMuted)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = "网络连接受阻，当前显示最后成功的本地缓存",
                     fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    color = colors.textSecondary
                 )
             }
         }
 
-        // 3. 下一节课卡片（本页视觉重点）
-        NextCourseCard(
+        // 3. A 类品牌主课程卡（NextCourseCard）
+        HeroCourseCard(
             courses = todayCourses,
             nowTimeStr = nowTimeStr,
             isLoading = timetableSnapshot?.phase == QueryPhase.LOADING && timetableSnapshot.data == null,
             error = timetableSnapshot?.error,
-            onCourseClick = { inspectingCourse = it },
+            isStale = timetableSnapshot?.isStale ?: false,
+            hasConfirmedTerm = currentTerm != null,
+            onClickCourse = { inspectingCourse = it },
+            onConflictClick = { conflictCourses = it },
             onGotoTimetable = { AppNavigator.navigateToTab(MainTab.TIMETABLE) },
             onRetry = {
                 currentTerm?.let {
@@ -272,446 +284,389 @@ fun TodayScreen(
             }
         )
 
-        // 4. 快捷查询一行（前 3 项可配置替换，第 4 项固定“全部”）
+        // 4. 快捷入口无外壳四等列（图标上、标签下，采用完整短标签与统一功能色）
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val quickIds = HomeLayoutConfigManager.quickActionIds
+            val candidateItems = listOf(
+                FeatureRegistry.ID_GRADES to ("成绩" to (Icons.Default.Star to (colors.gradeForeground to colors.gradeContainer))),
+                FeatureRegistry.ID_EXAMS to ("考试" to (Icons.Default.DateRange to (colors.examForeground to colors.examContainer))),
+                FeatureRegistry.ID_TASKS to ("待办" to (Icons.Default.CheckCircle to (colors.messageForeground to colors.messageContainer))),
+                FeatureRegistry.ID_CAMPUS_CARD to ("校园卡" to (Icons.Default.AccountBox to (colors.cardForeground to colors.cardContainer))),
+                FeatureRegistry.ID_NETWORK to ("网费" to (Icons.Default.Share to (colors.networkForeground to colors.networkContainer))),
+                FeatureRegistry.ID_MESSAGES to ("消息" to (Icons.Default.Notifications to (colors.messageForeground to colors.messageContainer)))
+            ).toMap()
+
             quickIds.take(3).forEach { featureId ->
                 val feat = FeatureRegistry.findById(featureId)
-                if (feat != null) {
-                    QuickActionButton(
-                        title = feat.title.take(2),
-                        featureId = feat.id,
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            when (feat.id) {
-                                FeatureRegistry.ID_GRADES -> AppNavigator.navigateTo(AppDestination.Grades)
-                                FeatureRegistry.ID_EXAMS -> AppNavigator.navigateTo(AppDestination.Exams)
-                                FeatureRegistry.ID_CAMPUS_CARD -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD))
-                                FeatureRegistry.ID_NETWORK -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK))
-                                FeatureRegistry.ID_MESSAGES -> AppNavigator.navigateTo(AppDestination.Messages)
-                                FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.Tasks)
-                                else -> AppNavigator.navigateToTab(MainTab.QUERY)
-                            }
+                val config = candidateItems[featureId]
+                val label = config?.first ?: (feat?.title?.take(2) ?: "功能")
+                val icon = config?.second?.first ?: Icons.Default.Search
+                val (fg, bg) = config?.second?.second ?: (colors.brand to colors.brandContainer)
+
+                QuickActionItem(
+                    title = label,
+                    icon = icon,
+                    iconTint = fg,
+                    iconContainer = bg,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        when (featureId) {
+                            FeatureRegistry.ID_GRADES -> AppNavigator.navigateTo(AppDestination.Grades)
+                            FeatureRegistry.ID_EXAMS -> AppNavigator.navigateTo(AppDestination.Exams)
+                            FeatureRegistry.ID_CAMPUS_CARD -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD))
+                            FeatureRegistry.ID_NETWORK -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK))
+                            FeatureRegistry.ID_MESSAGES -> AppNavigator.navigateTo(AppDestination.Messages)
+                            FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.Tasks)
+                            else -> AppNavigator.navigateToTab(MainTab.QUERY)
                         }
-                    )
-                }
+                    }
+                )
             }
+
             // 第 4 项固定“全部”
-            QuickActionButton(
+            QuickActionItem(
                 title = "全部",
-                featureId = "all",
+                icon = Icons.Default.Menu,
+                iconTint = colors.brand,
+                iconContainer = colors.brandContainer,
                 modifier = Modifier.weight(1f),
                 onClick = { AppNavigator.navigateToTab(MainTab.QUERY) }
             )
         }
 
-        // 5. 可配置摘要区（按用户偏好排序与显示）
+        // 5. 可配置摘要模块区（遵循 Section 4.2）
         HomeLayoutConfigManager.modules.filter { it.enabled }.forEach { module ->
             when (module.id) {
                 HomeLayoutConfigManager.MODULE_TODAY_COURSES -> {
-                    // 今天的课程
-                    QueryCard(
-                        title = "今天的课程",
-                        actionText = "看课表 ›",
+                    // 今日课程时间轴
+                    CampusSection(
+                        title = "今日课程",
+                        actionText = "完整课表 ›",
                         onActionClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
                     ) {
-                        if (todayCourses.isEmpty()) {
-                            Text(
-                                text = "今天没有已排课程安排",
-                                fontSize = 14.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                modifier = Modifier.padding(vertical = 8.dp)
+                        CourseTimeline(
+                            courses = todayCourses,
+                            nowTimeStr = nowTimeStr,
+                            onCourseClick = { inspectingCourse = it },
+                            onSeeAllClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
+                        )
+                    }
+                }
+
+                HomeLayoutConfigManager.MODULE_CAMPUS_LIFE -> {
+                    // 校园生活：两张轻色余额卡片（校园卡绿、网费青）
+                    CampusSection(
+                        title = "校园生活",
+                        actionText = if (hideBalance) "显示余额" else "隐藏余额",
+                        onActionClick = { edu.neu.campus.app.feature.balance.BalancePrivacyManager.toggleMasked() }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // 校园卡余额卡片 (Light Green)
+                            BalanceSummaryCard(
+                                title = "校园卡",
+                                balanceValue = cardSnapshot.data?.rawValue,
+                                lastSuccessEpochMillis = cardSnapshot.lastSuccessEpochMillis,
+                                isMasked = hideBalance,
+                                cardBg = colors.cardContainer,
+                                iconColor = colors.cardForeground,
+                                icon = Icons.Default.AccountBox,
+                                modifier = Modifier.weight(1f),
+                                onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD)) }
                             )
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                todayCourses.take(4).forEach { c ->
-                                    val endTimeStr = c.endTime
-                                    val isEnded = endTimeStr != null && endTimeStr < nowTimeStr
+
+                            // 网费余额卡片 (Light Cyan)
+                            BalanceSummaryCard(
+                                title = "网费",
+                                balanceValue = netSnapshot.data?.rawValue,
+                                lastSuccessEpochMillis = netSnapshot.lastSuccessEpochMillis,
+                                isMasked = hideBalance,
+                                cardBg = colors.networkContainer,
+                                iconColor = colors.networkForeground,
+                                icon = Icons.Default.Share,
+                                modifier = Modifier.weight(1f),
+                                onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK)) }
+                            )
+                        }
+                    }
+                }
+
+                HomeLayoutConfigManager.MODULE_RECENT_EXAMS -> {
+                    // 最近考试摘要
+                    val exams = examsSnapshot?.data.orEmpty()
+                    if (exams.isNotEmpty()) {
+                        val upcoming = exams.firstOrNull { it.arranged } ?: exams.first()
+                        CampusSection(
+                            title = "最近考试",
+                            actionText = "查看全部 ›",
+                            onActionClick = { AppNavigator.navigateTo(AppDestination.Exams) }
+                        ) {
+                            CampusGroup {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { AppNavigator.navigateTo(AppDestination.ExamDetail(upcoming.courseName)) }
+                                        .padding(vertical = 4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .clickable { inspectingCourse = c }
-                                            .padding(vertical = 4.dp),
+                                        modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = upcoming.courseName,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colors.textPrimary
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(colors.examContainer)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
                                             Text(
-                                                text = "${c.beginTime ?: "第${c.beginSection}节"}  ${c.title}",
-                                                fontSize = 14.sp,
+                                                text = if (upcoming.arranged) "已排考" else "待排考",
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Medium,
-                                                color = if (isEnded) MiuixTheme.colorScheme.onSurfaceSecondary else MiuixTheme.colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = c.place ?: "教室待定",
-                                                fontSize = 12.sp,
-                                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                                color = colors.examForeground
                                             )
                                         }
-                                        Text(
-                                            text = if (isEnded) "已结束" else "待上课",
-                                            fontSize = 12.sp,
-                                            color = if (isEnded) MiuixTheme.colorScheme.onSurfaceSecondary else MiuixTheme.colorScheme.primary
-                                        )
                                     }
-                                }
-                                if (todayCourses.size > 4) {
                                     Text(
-                                        text = "查看全部 ${todayCourses.size} 项 ›",
-                                        fontSize = 12.sp,
-                                        color = MiuixTheme.colorScheme.primary,
-                                        modifier = Modifier
-                                            .clickable { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
-                                            .padding(top = 4.dp)
+                                        text = "${upcoming.timeDescription ?: "时间待定"} · ${upcoming.place ?: "考场待公布"}",
+                                        fontSize = 13.sp,
+                                        color = colors.textSecondary
                                     )
                                 }
                             }
                         }
                     }
                 }
-                HomeLayoutConfigManager.MODULE_CAMPUS_LIFE -> {
-                    // 校园生活余额摘要
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "校园生活",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MiuixTheme.colorScheme.onSurface
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(MiuixTheme.colorScheme.surfaceContainer)
-                                    .clickable { edu.neu.campus.app.feature.balance.BalancePrivacyManager.toggleMasked() }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (hideBalance) "显示余额" else "隐藏余额",
-                                    fontSize = 12.sp,
-                                    color = MiuixTheme.colorScheme.primary
-                                )
-                            }
-                        }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // 校园卡余额卡片
-                            QueryCard(
-                                modifier = Modifier.weight(1f),
-                                title = "校园卡",
-                                onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD)) }
-                            ) {
-                                val card = cardSnapshot.data
-                                val hasCardVal = card?.rawValue != null
-                                val displayVal = if (hideBalance) "¥ ••••" else if (hasCardVal) "¥ ${card.rawValue}" else "未同步"
-                                Text(
-                                    text = displayVal,
-                                    fontSize = if (hasCardVal || hideBalance) 19.sp else 15.sp,
-                                    fontWeight = if (hasCardVal || hideBalance) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (hasCardVal || hideBalance) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                                Text(
-                                    text = "更新于 ${TimeFormatter.formatTime(cardSnapshot.lastSuccessEpochMillis)}",
-                                    fontSize = 11.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
-                                )
-                            }
-
-                            // 网费余额卡片
-                            QueryCard(
-                                modifier = Modifier.weight(1f),
-                                title = "网费",
-                                onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK)) }
-                            ) {
-                                val net = netSnapshot.data
-                                val hasNetVal = net?.rawValue != null
-                                val displayVal = if (hideBalance) "¥ ••••" else if (hasNetVal) "¥ ${net.rawValue}" else "未同步"
-                                Text(
-                                    text = displayVal,
-                                    fontSize = if (hasNetVal || hideBalance) 19.sp else 15.sp,
-                                    fontWeight = if (hasNetVal || hideBalance) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (hasNetVal || hideBalance) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                                Text(
-                                    text = "更新于 ${TimeFormatter.formatTime(netSnapshot.lastSuccessEpochMillis)}",
-                                    fontSize = 11.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
-                                )
-                            }
-                        }
-                    }
-                }
-                HomeLayoutConfigManager.MODULE_RECENT_EXAMS -> {
-                    // 最近考试摘要（有考试数据时才显示卡片，避免空卡）
-                    val exams = examsSnapshot?.data.orEmpty()
-                    if (exams.isNotEmpty()) {
-                        val upcoming = exams.firstOrNull { it.arranged } ?: exams.first()
-                        QueryCard(
-                            title = "最近考试",
-                            actionText = "查看全部 ›",
-                            onActionClick = { AppNavigator.navigateTo(AppDestination.ExamDetail("")) },
-                            onClick = { AppNavigator.navigateTo(AppDestination.ExamDetail(upcoming.courseName)) }
-                        ) {
-                            Text(
-                                text = upcoming.courseName,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "${upcoming.timeDescription ?: "时间待定"} · ${upcoming.place ?: "考场待公布"}",
-                                fontSize = 13.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-                }
                 HomeLayoutConfigManager.MODULE_RECENT_TASKS -> {
                     // 待办事项摘要
                     val tasks = tasksSnapshot.data?.items.orEmpty()
                     if (tasks.isNotEmpty()) {
-                        QueryCard(
+                        CampusSection(
                             title = "待办事项 (${tasksSnapshot.data?.total ?: tasks.size})",
                             actionText = "查看列表 ›",
                             onActionClick = { AppNavigator.navigateTo(AppDestination.Tasks) }
                         ) {
-                            tasks.take(2).forEach { t ->
-                                Text(
-                                    text = "• ${t.title}",
-                                    fontSize = 13.sp,
-                                    color = MiuixTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(vertical = 2.dp)
-                                )
+                            CampusGroup {
+                                tasks.take(2).forEachIndexed { idx, t ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(colors.messageForeground)
+                                        )
+                                        Text(
+                                            text = t.title,
+                                            fontSize = 14.sp,
+                                            color = colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (idx < tasks.take(2).lastIndex) {
+                                        CampusGroupDivider(startIndent = 14.dp)
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
-    // 详情抽屉
+    // 冲突课程选择抽屉
+    conflictCourses?.let { conflicts ->
+        OverlayBottomSheet(
+            show = true,
+            title = "同时段课程安排 (${conflicts.size} 项)",
+            onDismissRequest = { conflictCourses = null },
+            endAction = {
+                Button(onClick = { conflictCourses = null }) { Text("关闭") }
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "当前时段存在多项排课，请选择具体课程查看详情：",
+                    fontSize = 13.sp,
+                    color = colors.textSecondary
+                )
+                conflicts.forEach { c ->
+                    QueryCard(
+                        title = c.title,
+                        subtitle = "第 ${c.beginSection}-${c.endSection} 节 · ${c.place ?: "教室待定"}",
+                        onClick = {
+                            conflictCourses = null
+                            inspectingCourse = c
+                        }
+                    ) {}
+                }
+            }
+        }
+    }
+
+    // 课程详情原生抽屉
     inspectingCourse?.let { c ->
+        val others = arrangedCourses.filter { it.title == c.title && it != c }
         CourseDetailBottomSheet(
             course = c,
+            otherOccurrences = others,
             lastUpdatedTime = timetableSnapshot?.lastSuccessEpochMillis,
             onDismiss = { inspectingCourse = null }
         )
     }
 }
 
+/**
+ * 首页无外壳快捷入口单项。
+ * 遵循 Section 4.2：图标上、标签下，四等列，触控范围 >= 48dp，完整短标签。
+ */
 @Composable
-private fun NextCourseCard(
-    courses: List<CourseOccurrence>,
-    nowTimeStr: String,
-    isLoading: Boolean,
-    error: QueryError?,
-    onCourseClick: (CourseOccurrence) -> Unit,
-    onGotoTimetable: () -> Unit,
-    onRetry: () -> Unit
-) {
-    // 视觉焦点卡片
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(18.dp)
-    ) {
-        when {
-            isLoading -> {
-                Column(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "正在同步今日排课…",
-                        fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                    )
-                }
-            }
-            error != null -> {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "排课数据暂未更新",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = error.message.ifBlank { "查询失败，请点击重试" },
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                    )
-                    Button(onClick = onRetry) { Text("重新加载") }
-                }
-            }
-            courses.isEmpty() -> {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "今天没有已安排课程",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MiuixTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "好好休息或查看本周后续排课",
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
-                        )
-                    }
-                    Button(onClick = onGotoTimetable) {
-                        Text("查看课表 ›")
-                    }
-                }
-            }
-            else -> {
-                // 查找当前进行中或即将开始的课程
-                val ongoing = courses.firstOrNull {
-                    val b = it.beginTime
-                    val e = it.endTime
-                    b != null && e != null && nowTimeStr >= b && nowTimeStr <= e
-                }
-                val upcoming = courses.firstOrNull {
-                    val b = it.beginTime
-                    b != null && b > nowTimeStr
-                } ?: courses.lastOrNull()
-
-                val target = ongoing ?: upcoming
-                val isOngoing = ongoing != null
-
-                if (target != null) {
-                    val statusTag = if (isOngoing) "正在上课" else "下一节课"
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = statusTag,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isOngoing) Color(0xFF2E7D32) else MiuixTheme.colorScheme.primary
-                        )
-                        val b = target.beginTime
-                        val e = target.endTime
-                        val timeSpan = if (b != null && e != null) {
-                            "$b—$e"
-                        } else "第 ${target.beginSection}-${target.endSection} 节"
-                        Text(
-                            text = timeSpan,
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
-                        )
-                    }
-
-                    Text(
-                        text = target.title,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-
-                    Text(
-                        text = "${target.place ?: "教室待定"} · 第 ${target.beginSection}-${target.endSection} 节",
-                        fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(onClick = { onCourseClick(target) }) {
-                            Text("查看详情 ›")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickActionButton(
+private fun QuickActionItem(
     title: String,
-    featureId: String,
+    icon: ImageVector,
+    iconTint: Color,
+    iconContainer: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val (icon, iconColor) = when (featureId) {
-        FeatureRegistry.ID_GRADES -> Pair(Icons.Default.Star, Color(0xFFFF9800))
-        FeatureRegistry.ID_EXAMS -> Pair(Icons.Default.DateRange, Color(0xFF7E57C2))
-        FeatureRegistry.ID_TASKS -> Pair(Icons.Default.CheckCircle, Color(0xFF26A69A))
-        FeatureRegistry.ID_CAMPUS_CARD -> Pair(Icons.Default.AccountBox, Color(0xFF42A5F5))
-        FeatureRegistry.ID_NETWORK -> Pair(Icons.Default.Share, Color(0xFF5C6BC0))
-        FeatureRegistry.ID_MESSAGES -> Pair(Icons.Default.Notifications, Color(0xFFEF5350))
-        "all" -> Pair(Icons.Default.Menu, MiuixTheme.colorScheme.primary)
-        else -> Pair(Icons.Default.Search, MiuixTheme.colorScheme.primary)
-    }
+    val colors = CampusTheme.colors
 
-    Card(
-        colors = CardDefaults.defaultColors(),
-        insideMargin = PaddingValues(0.dp),
+    Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(iconContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = iconTint,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        Text(
+            text = title,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.textPrimary
+        )
+    }
+}
+
+/**
+ * 校园生活轻色余额摘要小卡。
+ * 遵循 Section 4.2：等宽轻色卡（校园卡绿、网费青），金额用 TextPrimary，最近同步 HH:mm。
+ */
+@Composable
+private fun BalanceSummaryCard(
+    title: String,
+    balanceValue: String?,
+    lastSuccessEpochMillis: Long?,
+    isMasked: Boolean,
+    cardBg: Color,
+    iconColor: Color,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = CampusTheme.colors
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBg)
+            .clickable(onClick = onClick)
+            .padding(16.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 2.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(iconColor.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = title,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                }
                 Icon(
-                    imageVector = icon,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(19.dp)
+                    tint = colors.textSecondary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
                 )
             }
+
+            val hasValue = balanceValue != null
+            val displayVal = when {
+                isMasked -> "¥ ••••"
+                hasValue -> "¥ $balanceValue"
+                else -> "未同步"
+            }
+
             Text(
-                text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onSurface
+                text = displayVal,
+                fontSize = if (isMasked || hasValue) 22.sp else 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary
+            )
+
+            Text(
+                text = "最近同步 ${TimeFormatter.formatTime(lastSuccessEpochMillis)}",
+                fontSize = 11.sp,
+                color = colors.textSecondary
             )
         }
     }

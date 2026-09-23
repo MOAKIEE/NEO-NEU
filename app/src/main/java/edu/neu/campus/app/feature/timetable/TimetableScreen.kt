@@ -6,39 +6,40 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import edu.neu.campus.app.CampusDataProvider
-import edu.neu.campus.app.navigation.AppDestination
-import edu.neu.campus.app.navigation.AppNavigator
-import edu.neu.campus.contract.*
-import edu.neu.campus.ui.components.LoadStatePanel
-import edu.neu.campus.ui.components.QueryCard
-import edu.neu.campus.ui.components.SafeDataTag
-import edu.neu.campus.ui.timetable.CourseDetailBottomSheet
-import edu.neu.campus.ui.timetable.TimetableGrid
-import edu.neu.campus.ui.timetable.dayOfWeekText
-import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.navigation.AppDestination
+import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.contract.*
+import edu.neu.campus.ui.components.CampusGroup
+import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.ui.components.LoadStatePanel
+import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.theme.CampusTheme
+import edu.neu.campus.ui.timetable.CourseDetailBottomSheet
+import edu.neu.campus.ui.timetable.TimetableGrid
+import edu.neu.campus.ui.timetable.dayOfWeekText
+import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun TimetableScreen(
@@ -46,6 +47,7 @@ fun TimetableScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val academic = CampusDataProvider.academic
+    val colors = CampusTheme.colors
 
     val termsSnapshot by academic.terms().collectAsState()
     val terms = termsSnapshot.data.orEmpty()
@@ -67,7 +69,7 @@ fun TimetableScreen(
     var weeks by remember { mutableStateOf<List<TeachingWeek>>(emptyList()) }
     var campuses by remember { mutableStateOf<List<Campus>>(emptyList()) }
     var selectedWeekNumber by remember { mutableStateOf<Int?>(null) }
-    var selectedCampusId by remember { mutableStateOf<String?>(null) } // null 为全部校区
+    var selectedCampusId by remember { mutableStateOf<String?>(null) }
     var isListView by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentTerm?.id) {
@@ -113,31 +115,35 @@ fun TimetableScreen(
 
     val currentWeekObj = weeks.firstOrNull { it.number == selectedWeekNumber }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // 第一行：顶部标题与操作栏
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background)
+    ) {
+        // 1. 顶部标题栏（包含网格/列表切换与更多菜单）
         TopAppBar(
             title = "课表",
             actions = {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.brandContainer)
                         .clickable { isListView = !isListView }
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         imageVector = if (isListView) Icons.Default.DateRange else Icons.Default.Menu,
                         contentDescription = null,
-                        tint = MiuixTheme.colorScheme.primary,
+                        tint = colors.brand,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
                         text = if (isListView) "网格" else "列表",
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.primary
+                        color = colors.brand
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
@@ -145,70 +151,74 @@ fun TimetableScreen(
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "更多",
-                        tint = MiuixTheme.colorScheme.onSurface
+                        tint = colors.textPrimary
                     )
                 }
             }
         )
 
-        // 第二行：学期选择与筛选栏
+        // 2. 学期选择与校区筛选栏（同一控制行，Section 5）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainer)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.surface)
                     .clickable { showTermPicker = true }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = currentTerm?.name ?: "选择学期",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = colors.textPrimary
                 )
-                Text(text = " ▾", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceSecondary)
+                Text(text = " ▾", fontSize = 11.sp, color = colors.textSecondary)
             }
 
             // 校区筛选
             if (campuses.size > 1) {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surface)
                         .clickable {
                             val allIds = listOf<String?>(null) + campuses.map { it.id }
                             val nextIndex = (allIds.indexOf(selectedCampusId) + 1) % allIds.size
                             selectedCampusId = allIds[nextIndex]
                         }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 12.dp, vertical = 7.dp)
                 ) {
                     val label = if (selectedCampusId == null) "全部校区" else campuses.firstOrNull { it.id == selectedCampusId }?.name ?: "校区"
-                    Text(text = "$label ▾", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceSecondary)
+                    Text(text = "$label ▾", fontSize = 12.sp, color = colors.textSecondary)
                 }
             }
         }
 
-        // 第三行：周次控制器（‹ 上一周、第 N 周、› 下一周、回本周）
+        // 3. 周次控制器（独立一行，‹ 上一周、第 N 周、› 下一周、回本周）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // 上一周按钮 (touch target >= 44dp)
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surface)
                         .clickable(enabled = (selectedWeekNumber ?: 1) > 1) {
                             val current = selectedWeekNumber ?: 1
                             if (current > 1) selectedWeekNumber = current - 1
@@ -218,17 +228,18 @@ fun TimetableScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "上一周",
-                        tint = if ((selectedWeekNumber ?: 1) > 1) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
+                        tint = if ((selectedWeekNumber ?: 1) > 1) colors.textPrimary else colors.textSecondary.copy(alpha = 0.35f),
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
+                // 当前周次指示与下拉
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surface)
                         .clickable { showWeekPicker = true }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val sDate = currentWeekObj?.startDate
@@ -240,16 +251,17 @@ fun TimetableScreen(
                         text = "第 ${selectedWeekNumber ?: 1} 周$dateRange ▾",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.primary
+                        color = colors.brand
                     )
                 }
 
+                // 下一周按钮
                 val maxWeek = if (weeks.isNotEmpty()) weeks.maxOf { it.number } else 25
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surface)
                         .clickable(enabled = (selectedWeekNumber ?: 1) < maxWeek) {
                             val current = selectedWeekNumber ?: 1
                             if (current < maxWeek) selectedWeekNumber = current + 1
@@ -259,34 +271,34 @@ fun TimetableScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "下一周",
-                        tint = if ((selectedWeekNumber ?: 1) < maxWeek) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
+                        tint = if ((selectedWeekNumber ?: 1) < maxWeek) colors.textPrimary else colors.textSecondary.copy(alpha = 0.35f),
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            // 回本周按钮
+            // 回本周按钮（离开本周时出现）
             val currentActualWeek = weeks.firstOrNull { it.isCurrent }?.number
             if (currentActualWeek != null && selectedWeekNumber != currentActualWeek) {
-                Row(
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MiuixTheme.colorScheme.primary)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.brand)
                         .clickable { selectedWeekNumber = currentActualWeek }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "回本周",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onPrimary
+                        color = Color.White
                     )
                 }
             }
         }
 
-        // 状态处理：加载中、错误重试、会话过期
+        // 状态处理：加载与异常重试
         if (timetableSnapshot != null && (timetableSnapshot.phase == QueryPhase.LOADING || timetableSnapshot.phase == QueryPhase.FAILED)) {
             LoadStatePanel(
                 isLoading = timetableSnapshot.phase == QueryPhase.LOADING && timetableSnapshot.data == null,
@@ -311,37 +323,77 @@ fun TimetableScreen(
                     onConflictClick = { conflictCourses = it }
                 )
             } else {
-                // 列表视图（按周一至周日平铺）
+                // 列表视图：按周一至周日以 B 类 Surface 分组排布
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     for (day in 1..7) {
                         val dayCourses = filteredCourses.filter { it.dayOfWeek == day }
                         if (dayCourses.isNotEmpty()) {
                             item {
-                                Text(
-                                    text = "星期${dayOfWeekText(day)}",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MiuixTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                                )
-                            }
-                            items(dayCourses) { c ->
-                                QueryCard(
-                                    title = c.title,
-                                    subtitle = "第 ${c.beginSection}-${c.endSection} 节 (${c.beginTime ?: ""}-${c.endTime ?: ""}) · ${c.place ?: "教室待定"}",
-                                    onClick = { inspectingCourse = c }
-                                ) {
-                                    if (!c.teacher.isNullOrBlank()) {
-                                        Text(
-                                            text = "教师：${c.teacher}",
-                                            fontSize = 13.sp,
-                                            color = MiuixTheme.colorScheme.onSurfaceSecondary
-                                        )
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "星期${dayOfWeekText(day)}",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary,
+                                        modifier = Modifier.padding(start = 4.dp)
+                                    )
+                                    CampusGroup {
+                                        dayCourses.forEachIndexed { idx, c ->
+                                            val (accentColor, _) = colors.courseColor(c.title)
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { inspectingCourse = c }
+                                                    .padding(vertical = 10.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .width(4.dp)
+                                                            .height(36.dp)
+                                                            .clip(RoundedCornerShape(2.dp))
+                                                            .background(accentColor)
+                                                    )
+                                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                        Text(
+                                                            text = c.title,
+                                                            fontSize = 15.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = colors.textPrimary
+                                                        )
+                                                        val timeStr = if (!c.beginTime.isNullOrBlank()) " (${c.beginTime}-${c.endTime})" else ""
+                                                        Text(
+                                                            text = "第 ${c.beginSection}-${c.endSection} 节$timeStr · ${c.place ?: "教室待定"}",
+                                                            fontSize = 12.sp,
+                                                            color = colors.textSecondary
+                                                        )
+                                                    }
+                                                }
+                                                val teacherName = c.teacher
+                                                if (!teacherName.isNullOrBlank()) {
+                                                    Text(
+                                                        text = teacherName,
+                                                        fontSize = 12.sp,
+                                                        color = colors.textSecondary,
+                                                        modifier = Modifier.padding(start = 8.dp)
+                                                    )
+                                                }
+                                            }
+                                            if (idx < dayCourses.lastIndex) {
+                                                CampusGroupDivider(startIndent = 14.dp)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -349,10 +401,15 @@ fun TimetableScreen(
                     }
                     if (filteredCourses.isEmpty() && timetableSnapshot?.phase == QueryPhase.READY) {
                         item {
-                            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(40.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = "本周暂无已安排排课",
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    text = "本周暂无已安排课程",
+                                    color = colors.textSecondary,
                                     fontSize = 15.sp
                                 )
                             }
@@ -366,7 +423,8 @@ fun TimetableScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+                .background(colors.surface)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -375,7 +433,8 @@ fun TimetableScreen(
                 Text(
                     text = "未排课或实践课程 $unscheduledCount 项 ›",
                     fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.brand,
                     modifier = Modifier.clickable { showUnscheduledSheet = true }
                 )
             } else {
@@ -416,23 +475,64 @@ fun TimetableScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "该时间段存在多门排课，请选择查看具体详情：",
+                    text = "该时间段存在多门排课，请选择具体课程查看详情：",
                     fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    color = colors.textSecondary
                 )
-                conflicts.forEach { c ->
-                    QueryCard(
-                        title = c.title,
-                        subtitle = "第 ${c.beginSection}-${c.endSection} 节 · ${c.place ?: "教室待定"}",
-                        onClick = {
-                            conflictCourses = null
-                            inspectingCourse = c
+                CampusGroup {
+                    conflicts.forEachIndexed { idx, c ->
+                        val (accentColor, _) = colors.courseColor(c.title)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    conflictCourses = null
+                                    inspectingCourse = c
+                                }
+                                .padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(4.dp)
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(accentColor)
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = c.title,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textPrimary
+                                    )
+                                    Text(
+                                        text = "第 ${c.beginSection}-${c.endSection} 节 · ${c.place ?: "教室待定"}",
+                                        fontSize = 12.sp,
+                                        color = colors.textSecondary
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "详情 ›",
+                                fontSize = 13.sp,
+                                color = colors.brand
+                            )
                         }
-                    ) {}
+                        if (idx < conflicts.lastIndex) {
+                            CampusGroupDivider(startIndent = 14.dp)
+                        }
+                    }
                 }
             }
         }
@@ -449,8 +549,8 @@ fun TimetableScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 380.dp)
-                    .padding(16.dp),
+                    .heightIn(max = 400.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(weeks) { w ->
@@ -458,8 +558,8 @@ fun TimetableScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) MiuixTheme.colorScheme.primary.copy(alpha = 0.12f) else MiuixTheme.colorScheme.surfaceContainer)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) colors.brandContainer else colors.surface)
                             .clickable {
                                 selectedWeekNumber = w.number
                                 showWeekPicker = false
@@ -472,13 +572,13 @@ fun TimetableScreen(
                             text = "第 ${w.number} 周" + if (w.isCurrent) " (本周)" else "",
                             fontSize = 15.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
+                            color = if (isSelected) colors.brand else colors.textPrimary
                         )
                         if (w.startDate != null && w.endDate != null) {
                             Text(
                                 text = "${w.startDate} ~ ${w.endDate}",
                                 fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                color = if (isSelected) colors.brand else colors.textSecondary
                             )
                         }
                     }
@@ -498,8 +598,8 @@ fun TimetableScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 380.dp)
-                    .padding(16.dp),
+                    .heightIn(max = 400.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(terms) { t ->
@@ -507,8 +607,8 @@ fun TimetableScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) MiuixTheme.colorScheme.primary.copy(alpha = 0.12f) else MiuixTheme.colorScheme.surfaceContainer)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) colors.brandContainer else colors.surface)
                             .clickable {
                                 selectedTerm = t
                                 selectedWeekNumber = null
@@ -522,7 +622,7 @@ fun TimetableScreen(
                             text = t.name + if (t.isCurrent) " (当前)" else "",
                             fontSize = 15.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
+                            color = if (isSelected) colors.brand else colors.textPrimary
                         )
                     }
                 }
@@ -530,7 +630,7 @@ fun TimetableScreen(
         }
     }
 
-    // 抽屉 5：未排课与更多页面菜单
+    // 抽屉 5：未排课与作息快捷选项
     if (showUnscheduledSheet) {
         val unscheduledList = (rawTable?.unscheduled.orEmpty() + rawTable?.practice.orEmpty())
         OverlayBottomSheet(
@@ -542,22 +642,32 @@ fun TimetableScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 快捷跳转作息时间与校历
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Button(
-                        onClick = {
-                            showUnscheduledSheet = false
-                            AppNavigator.navigateTo(AppDestination.BellSchedule)
-                        },
-                        modifier = Modifier.weight(1f)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.brandContainer)
+                            .clickable {
+                                showUnscheduledSheet = false
+                                AppNavigator.navigateTo(AppDestination.BellSchedule)
+                            }
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("查看校区作息时间")
+                        Text(
+                            text = "查看校区作息时间",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.brand
+                        )
                     }
                 }
 
@@ -565,20 +675,39 @@ fun TimetableScreen(
                     text = "未安排节次或集中实践课程 (${unscheduledList.size} 门)：",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = colors.textPrimary
                 )
                 if (unscheduledList.isEmpty()) {
                     Text(
-                        text = "本学期暂无未安排节次的课程记录。",
+                        text = "本学期暂无未安排节次的排课记录。",
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = colors.textSecondary
                     )
                 } else {
-                    unscheduledList.forEach { u ->
-                        QueryCard(
-                            title = u.title,
-                            subtitle = u.reason ?: "集中实践/未排课，请以学院具体安排为准"
-                        ) {}
+                    CampusGroup {
+                        unscheduledList.forEachIndexed { idx, u ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(
+                                    text = u.title,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = u.reason ?: "集中实践/未排课，请以学院具体安排为准",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
+                            }
+                            if (idx < unscheduledList.lastIndex) {
+                                CampusGroupDivider()
+                            }
+                        }
                     }
                 }
             }

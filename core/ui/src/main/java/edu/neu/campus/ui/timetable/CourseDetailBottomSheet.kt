@@ -8,17 +8,24 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.contract.CourseOccurrence
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
+/**
+ * 课程详情抽屉 (CourseDetailBottomSheet)。
+ * 严格遵照 docs/07-UI视觉与布局重设计.md 第 5 节规范：
+ * - 顶部细色条与课块颜色一致
+ * - 依次展示时间节次、上课地点与校区、任课教师、学校排课安排说明及其他时段排课
+ * - 来源与同步时间严格遵循只读真实数据口径
+ */
 @Composable
 fun CourseDetailBottomSheet(
     course: CourseOccurrence?,
@@ -27,6 +34,8 @@ fun CourseDetailBottomSheet(
     lastUpdatedTime: Long? = null,
     onDismiss: () -> Unit
 ) {
+    val colors = CampusTheme.colors
+
     OverlayBottomSheet(
         show = course != null,
         title = course?.title ?: "课程详情",
@@ -38,25 +47,37 @@ fun CourseDetailBottomSheet(
         }
     ) {
         if (course != null) {
+            val (courseAccentColor, _) = colors.courseColor(course.title)
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // 顶部细色条（与课块同色）
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(courseAccentColor)
+                )
+
                 // 1. 时间与节次
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
-                        .padding(14.dp),
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(colors.surfaceMuted)
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "时间安排",
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = colors.textSecondary
                     )
                     val timeStr = if (!course.beginTime.isNullOrBlank() && !course.endTime.isNullOrBlank()) {
                         "${course.beginTime} — ${course.endTime}"
@@ -67,13 +88,14 @@ fun CourseDetailBottomSheet(
                         text = "星期${dayOfWeekText(course.dayOfWeek)} · 第 ${course.beginSection}—${course.endSection} 节 ($timeStr)",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onSurface
+                        color = colors.textPrimary
                     )
                     if (!course.scheduleDescription.isNullOrBlank()) {
                         Text(
-                            text = course.scheduleDescription.orEmpty(),
+                            text = "学校安排说明：${course.scheduleDescription}",
                             fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.primary
+                            lineHeight = 18.sp,
+                            color = colors.brand
                         )
                     }
                 }
@@ -82,14 +104,15 @@ fun CourseDetailBottomSheet(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
-                        .padding(14.dp),
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(colors.surfaceMuted)
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "上课地点",
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = colors.textSecondary
                     )
                     val campusStr = campusName ?: "校区 ${course.campusId}"
                     val placeStr = course.place ?: "教室待定"
@@ -97,50 +120,52 @@ fun CourseDetailBottomSheet(
                         text = "$campusStr · $placeStr",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onSurface
+                        color = colors.textPrimary
                     )
                 }
 
-                // 3. 教师与元信息
+                // 3. 任课教师与课程记录标识
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
-                        .padding(14.dp),
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(colors.surfaceMuted)
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "任课教师及信息",
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = colors.textSecondary
                     )
                     Text(
                         text = "教师：${course.teacher ?: "暂未列明"}",
                         fontSize = 15.sp,
-                        color = MiuixTheme.colorScheme.onSurface
+                        color = colors.textPrimary
                     )
                     if (!course.sourceId.isNullOrBlank()) {
                         Text(
                             text = "课程记录标识：${course.sourceId}",
                             fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            color = colors.textSecondary
                         )
                     }
                 }
 
-                // 4. 其他上课安排
+                // 4. 本课程其他安排
                 if (otherOccurrences.isNotEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.surfaceMuted)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
                             text = "本课程其他上课安排",
                             fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            color = colors.textSecondary
                         )
                         otherOccurrences.forEach { other ->
                             Row(
@@ -151,19 +176,19 @@ fun CourseDetailBottomSheet(
                                 Text(
                                     text = "周${dayOfWeekText(other.dayOfWeek)} 第${other.beginSection}-${other.endSection}节 · ${other.place ?: "待定"}",
                                     fontSize = 14.sp,
-                                    color = MiuixTheme.colorScheme.onSurface
+                                    color = colors.textPrimary
                                 )
                                 Text(
                                     text = other.beginTime ?: "",
                                     fontSize = 12.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    color = colors.textSecondary
                                 )
                             }
                         }
                     }
                 }
 
-                // 5. 来源与更新时间
+                // 5. 来源与同步时间
                 SafeDataTag(
                     sourceName = "教务系统",
                     lastSuccessEpochMillis = lastUpdatedTime,
@@ -172,15 +197,4 @@ fun CourseDetailBottomSheet(
             }
         }
     }
-}
-
-fun dayOfWeekText(day: Int): String = when (day) {
-    1 -> "一"
-    2 -> "二"
-    3 -> "三"
-    4 -> "四"
-    5 -> "五"
-    6 -> "六"
-    7 -> "日"
-    else -> day.toString()
 }

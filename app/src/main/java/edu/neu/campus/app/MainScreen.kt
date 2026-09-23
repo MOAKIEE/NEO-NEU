@@ -1,6 +1,7 @@
 package edu.neu.campus.app
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -9,14 +10,16 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import edu.neu.campus.app.demo.DemoModeBanner
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
+import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarDefaults
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Text
 
 @Composable
 fun MainScreen(
@@ -28,6 +31,7 @@ fun MainScreen(
 ) {
     val currentTab = AppNavigator.currentTab
     val destination = AppNavigator.currentDestination
+    val colors = CampusTheme.colors
 
     BackHandler(enabled = destination != AppDestination.Main) {
         AppNavigator.popBack()
@@ -37,6 +41,7 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(colors.background)
                 .statusBarsPadding()
         ) {
             DemoModeBanner()
@@ -46,32 +51,45 @@ fun MainScreen(
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
+                .background(colors.background)
                 .statusBarsPadding(),
             bottomBar = {
-                NavigationBar {
+                val navItemColors = NavigationBarDefaults.navigationBarItemColors(
+                    selectedContentColor = colors.brand,
+                    unselectedContentColor = colors.textSecondary
+                )
+                NavigationBar(
+                    color = colors.surface,
+                    showDivider = true,
+                    defaultWindowInsetsPadding = true
+                ) {
                     NavigationBarItem(
                         selected = currentTab == MainTab.TODAY,
                         onClick = { AppNavigator.navigateToTab(MainTab.TODAY) },
                         icon = Icons.Default.Home,
-                        label = MainTab.TODAY.title
+                        label = MainTab.TODAY.title,
+                        colors = navItemColors
                     )
                     NavigationBarItem(
                         selected = currentTab == MainTab.TIMETABLE,
                         onClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) },
                         icon = Icons.Default.DateRange,
-                        label = MainTab.TIMETABLE.title
+                        label = MainTab.TIMETABLE.title,
+                        colors = navItemColors
                     )
                     NavigationBarItem(
                         selected = currentTab == MainTab.QUERY,
                         onClick = { AppNavigator.navigateToTab(MainTab.QUERY) },
                         icon = Icons.Default.Search,
-                        label = MainTab.QUERY.title
+                        label = MainTab.QUERY.title,
+                        colors = navItemColors
                     )
                     NavigationBarItem(
                         selected = currentTab == MainTab.SETTINGS,
                         onClick = { AppNavigator.navigateToTab(MainTab.SETTINGS) },
                         icon = Icons.Default.Person,
-                        label = MainTab.SETTINGS.title
+                        label = MainTab.SETTINGS.title,
+                        colors = navItemColors
                     )
                 }
             }

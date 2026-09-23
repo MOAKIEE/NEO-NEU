@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,9 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.contract.CourseOccurrence
 import edu.neu.campus.contract.TeachingWeek
+import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.*
 
 private val SectionPairs = listOf(
     Pair(1, 2) to "08:00\n09:40",
@@ -32,22 +34,15 @@ private val SectionPairs = listOf(
     Pair(11, 12) to "20:20\n22:00"
 )
 
-private val CoursePalette = listOf(
-    Color(0xFFE8F0FE) to Color(0xFF1967D2),
-    Color(0xFFFEF7E0) to Color(0xFFB06000),
-    Color(0xFFE6F4EA) to Color(0xFF137333),
-    Color(0xFFFCE8E6) to Color(0xFFC5221F),
-    Color(0xFFF3E8FD) to Color(0xFF7627BB),
-    Color(0xFFE0F2F1) to Color(0xFF00796B),
-    Color(0xFFFFF3E0) to Color(0xFFE65100),
-    Color(0xFFEDE7F6) to Color(0xFF512DA8)
-)
-
-private fun colorForCourse(title: String): Pair<Color, Color> {
-    val index = kotlin.math.abs(title.hashCode()) % CoursePalette.size
-    return CoursePalette[index]
-}
-
+/**
+ * 课表网格组件 (TimetableGrid)。
+ * 严格遵照 docs/07-UI视觉与布局重设计.md 第 5 节规范：
+ * - 顶部固定日期与星期行，今日高亮
+ * - 左侧节次坐标轴（1..12 节，规范 44dp 宽度）
+ * - 单日列宽最小 64dp，支持日期与网格横向联动滚动，避免窄屏硬挤
+ * - 6 组稳定课程配色，同门课跨周一致，深浅模式自动适配
+ * - 12dp 圆角课程块，细色条指示，冲突课程集合卡片提示
+ */
 @Composable
 fun TimetableGrid(
     courses: List<CourseOccurrence>,
@@ -56,22 +51,47 @@ fun TimetableGrid(
     onConflictClick: (List<CourseOccurrence>) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = CampusTheme.colors
     val todayDayOfWeek = rememberTodayDayOfWeek()
     val scrollStateV = rememberScrollState()
     val scrollStateH = rememberScrollState()
 
-    val dayColumnWidth = 64.dp
-    val sectionRowHeight = 72.dp
-    val sectionHeaderWidth = 42.dp
+    val dayColumnWidth = 66.dp
+    val sectionRowHeight = 76.dp
+    val sectionHeaderWidth = 44.dp
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    // 计算当周各天的日期数值（如 21, 22...）
+    val weekDates = remember(currentWeek?.startDate) {
+        calculateWeekDates(currentWeek?.startDate)
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(colors.background)
+    ) {
         // 1. 顶部固定星期与日期行
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp)
+                .background(colors.surface)
+                .padding(vertical = 6.dp)
         ) {
-            Spacer(modifier = Modifier.width(sectionHeaderWidth))
+            // 左上角节次轴留白
+            Box(
+                modifier = Modifier
+                    .width(sectionHeaderWidth)
+                    .height(38.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "节次",
+                    fontSize = 11.sp,
+                    color = colors.textSecondary
+                )
+            }
+
+            // 横向滚动的星期与日期栏
             Row(
                 modifier = Modifier
                     .weight(1f)
@@ -79,25 +99,44 @@ fun TimetableGrid(
             ) {
                 for (day in 1..7) {
                     val isToday = day == todayDayOfWeek
+                    val dateNumStr = weekDates.getOrNull(day - 1) ?: ""
+
                     Column(
                         modifier = Modifier
                             .width(dayColumnWidth)
                             .padding(horizontal = 2.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isToday) MiuixTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isToday) colors.brandContainer else Color.Transparent)
                             .padding(vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Text(
                             text = "周${dayOfWeekText(day)}",
-                            fontSize = 13.sp,
-                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isToday) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
+                            fontSize = 12.sp,
+                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isToday) colors.brand else colors.textPrimary
                         )
+                        if (dateNumStr.isNotBlank()) {
+                            Text(
+                                text = dateNumStr,
+                                fontSize = 11.sp,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isToday) colors.brand else colors.textSecondary
+                            )
+                        }
                     }
                 }
             }
         }
+
+        // 分割线
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(colors.outline.copy(alpha = 0.5f))
+        )
 
         // 2. 网格主体（节次纵向滚动，日期横向联动滚动）
         Row(
@@ -105,8 +144,12 @@ fun TimetableGrid(
                 .fillMaxSize()
                 .verticalScroll(scrollStateV)
         ) {
-            // 左侧固定节次与起止时间
-            Column(modifier = Modifier.width(sectionHeaderWidth)) {
+            // 左侧固定节次与时间轴
+            Column(
+                modifier = Modifier
+                    .width(sectionHeaderWidth)
+                    .background(colors.surface.copy(alpha = 0.6f))
+            ) {
                 SectionPairs.forEach { (pair, timeStr) ->
                     Box(
                         modifier = Modifier
@@ -120,14 +163,14 @@ fun TimetableGrid(
                                 text = "${pair.first}-${pair.second}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MiuixTheme.colorScheme.onSurface
+                                color = colors.textPrimary
                             )
                             Text(
                                 text = timeStr,
                                 fontSize = 9.sp,
                                 lineHeight = 11.sp,
                                 textAlign = TextAlign.Center,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                color = colors.textSecondary
                             )
                         }
                     }
@@ -155,46 +198,63 @@ fun TimetableGrid(
                                 modifier = Modifier
                                     .height(sectionRowHeight)
                                     .width(dayColumnWidth)
-                                    .padding(2.dp)
+                                    .padding(3.dp)
                             ) {
                                 when {
                                     matched.size == 1 -> {
                                         val course = matched[0]
-                                        val (bgColor, textColor) = colorForCourse(course.title)
-                                        Column(
+                                        // 采用稳定 6 色课程色映射
+                                        val (fgColor, bgColor) = colors.courseColor(course.title)
+
+                                        Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .clip(RoundedCornerShape(8.dp))
+                                                .clip(RoundedCornerShape(12.dp))
                                                 .background(bgColor)
                                                 .clickable { onCourseClick(course) }
-                                                .padding(4.dp),
-                                            verticalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Text(
-                                                text = course.title,
-                                                fontSize = 11.sp,
-                                                lineHeight = 13.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = textColor,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
+                                            // 左侧色条指示
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(3.5.dp)
+                                                    .fillMaxHeight()
+                                                    .background(fgColor)
                                             )
-                                            Text(
-                                                text = course.place ?: "",
-                                                fontSize = 10.sp,
-                                                color = textColor.copy(alpha = 0.85f),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(start = 6.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
+                                                verticalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = course.title,
+                                                    fontSize = 12.sp,
+                                                    lineHeight = 14.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = fgColor,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = course.place ?: "",
+                                                    fontSize = 10.sp,
+                                                    lineHeight = 12.sp,
+                                                    color = fgColor.copy(alpha = 0.85f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
+
                                     matched.size > 1 -> {
-                                        // 冲突处理：集合卡片展示
+                                        // 冲突排课：集合卡片展示
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFFFFEBEE))
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(colors.warning.copy(alpha = 0.18f))
                                                 .clickable { onConflictClick(matched) }
                                                 .padding(4.dp),
                                             verticalArrangement = Arrangement.Center,
@@ -204,22 +264,23 @@ fun TimetableGrid(
                                                 text = "${matched.size} 门冲突",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFFC62828)
+                                                color = colors.warning
                                             )
                                             Text(
                                                 text = "点击查看",
                                                 fontSize = 9.sp,
-                                                color = Color(0xFFC62828)
+                                                color = colors.warning
                                             )
                                         }
                                     }
+
                                     else -> {
                                         // 空白节次槽位
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.25f))
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(colors.surface.copy(alpha = 0.35f))
                                         )
                                     }
                                 }
@@ -230,6 +291,21 @@ fun TimetableGrid(
             }
         }
     }
+}
+
+private fun calculateWeekDates(startDateStr: String?): List<String> {
+    if (startDateStr.isNullOrBlank()) return emptyList()
+    return runCatching {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
+        val date = sdf.parse(startDateStr) ?: return emptyList()
+        val cal = Calendar.getInstance()
+        cal.time = date
+        (0..6).map {
+            val d = cal.get(Calendar.DAY_OF_MONTH)
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+            d.toString()
+        }
+    }.getOrDefault(emptyList())
 }
 
 private fun rememberTodayDayOfWeek(): Int {
@@ -244,4 +320,15 @@ private fun rememberTodayDayOfWeek(): Int {
         Calendar.SUNDAY -> 7
         else -> 1
     }
+}
+
+fun dayOfWeekText(day: Int): String = when (day) {
+    1 -> "一"
+    2 -> "二"
+    3 -> "三"
+    4 -> "四"
+    5 -> "五"
+    6 -> "六"
+    7 -> "日"
+    else -> day.toString()
 }
