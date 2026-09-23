@@ -24,7 +24,7 @@
 | 模糊模块 | 源码明确 minSdk 33 | 首版不直接依赖，以保留 API 24 构建下限 |
 | API 稳定性 | 官方标为实验性 | 包一层项目组件，集中处理升级 |
 
-核心、core、squircle、shader、preference 的 0.9.4 AAR 都核验了 minSdk 24 与 minCompileSdk 37。尚未创建 Android 工程或执行 Gradle 编译，因此“制品存在”不等于“项目已构建通过”。
+核心、core、squircle、shader、preference 的 0.9.4 AAR 都核验了 minSdk 24 与 minCompileSdk 37。2026-09-23 已建立数据阶段工程并以 compileSdk 37、minSdk 24 构建验证宿主；尚未把 Miuix 依赖加入正式 UI，也未验证 Miuix 页面构建。
 
 ## 依赖起点
 
