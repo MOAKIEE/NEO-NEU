@@ -221,18 +221,15 @@ fun TimetableGrid(
                                         .height(SectionHeight * rowCount)
                                         .fillMaxWidth()
                                         .padding(3.dp)
-                                        .clip(RoundedCornerShape(CampusShapes.small))
+                                        .tapScale(onClick = {
+                                                if (matched.size > 1) onConflictClick(matched) else onCourseClick(course)
+                                            },
+                                            pressedScale = 0.96f, clipShape = RoundedCornerShape(CampusShapes.small))
                                         .background(bg)
                                         .border(
                                             width = 1.dp,
                                             color = fg.copy(alpha = 0.16f),
                                             shape = RoundedCornerShape(CampusShapes.small)
-                                        )
-                                        .tapScale(
-                                            onClick = {
-                                                if (matched.size > 1) onConflictClick(matched) else onCourseClick(course)
-                                            },
-                                            pressedScale = 0.96f
                                         )
                                 ) {
                                     Row(modifier = Modifier.fillMaxSize()) {

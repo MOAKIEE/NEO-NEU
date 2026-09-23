@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -39,13 +40,19 @@ import kotlinx.coroutines.delay
  *
  * 行为约定：
  * - 按下时轻微缩小（默认 0.97），松开使用回弹曲线复位
+ * - 缩放层位于裁剪层外侧，因此「整个视觉块」会一起缩放，而不是只有内部内容
+ * - 传入 [clipShape] 时先裁剪再响应点击，使 Miuix 的矩形按压高亮被圆角裁掉
  * - 指示效果沿用 Miuix 提供的 [LocalIndication]，不额外叠加 Material 涟漪
+ *
+ * 推荐用法：`Modifier.tapScale(onClick = ..., clipShape = shape).background(color)`，
+ * 即把圆角交给本函数，背景与内容写在后面。
  */
 @Composable
 fun Modifier.tapScale(
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
-    pressedScale: Float = 0.97f
+    pressedScale: Float = 0.97f,
+    clipShape: Shape? = null
 ): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -60,6 +67,7 @@ fun Modifier.tapScale(
             scaleX = scale
             scaleY = scale
         }
+        .then(if (clipShape != null) Modifier.clip(clipShape) else Modifier)
         .then(
             if (onClick != null) {
                 Modifier.clickable(

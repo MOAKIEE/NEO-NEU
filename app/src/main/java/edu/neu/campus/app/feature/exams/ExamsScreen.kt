@@ -1,21 +1,15 @@
 package edu.neu.campus.app.feature.exams
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
@@ -24,16 +18,27 @@ import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.Exam
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.contract.Term
-import edu.neu.campus.ui.components.CampusGroup
+import edu.neu.campus.ui.components.CampusCard
+import edu.neu.campus.ui.components.CampusFilterChip
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusPill
+import edu.neu.campus.ui.components.CampusSegmentedControl
+import edu.neu.campus.ui.components.CampusSelectionRow
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
-import edu.neu.campus.ui.theme.LocalCampusColors
+import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
+import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Alarm
+import top.yukonga.miuix.kmp.icon.extended.Location
+import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 
 enum class ExamTab {
@@ -46,7 +51,7 @@ fun ExamsScreen(
     onLoginClick: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val campusColors = LocalCampusColors.current
+    val colors = CampusTheme.colors
     val academic = CampusDataProvider.academic
 
     val termsSnapshot by academic.terms().collectAsState()
@@ -86,102 +91,59 @@ fun ExamsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(campusColors.background)
+            .background(colors.background)
     ) {
         CampusTopBar(
             title = "考试安排",
-            onBack = onBack
+            onBack = onBack,
+            subtitle = "已安排与未安排考试"
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = CampusSpacing.screenHorizontal,
+                end = CampusSpacing.screenHorizontal,
+                top = CampusSpacing.xs,
+                bottom = CampusSpacing.screenBottom
+            ),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
         ) {
             // 1. 学期选择与更新状态
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                StaggeredAppear(index = 0) {
                     Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(campusColors.surface)
-                            .clickable { showTermPicker = true }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
+                        CampusFilterChip(
                             text = currentTerm?.name ?: "选择学期",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = campusColors.textPrimary
+                            onClick = { showTermPicker = true }
                         )
-                        Text(
-                            text = " ▾",
-                            fontSize = 12.sp,
-                            color = campusColors.textSecondary
+
+                        SafeDataTag(
+                            sourceName = "教务系统",
+                            lastSuccessEpochMillis = examsSnapshot?.lastSuccessEpochMillis,
+                            isStale = examsSnapshot?.isStale ?: false
                         )
                     }
-
-                    SafeDataTag(
-                        sourceName = "教务系统",
-                        lastSuccessEpochMillis = examsSnapshot?.lastSuccessEpochMillis,
-                        isStale = examsSnapshot?.isStale ?: false
-                    )
                 }
             }
 
             // 2. 分段切换药丸：【已安排 (N)】 / 【未安排 (N)】
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(campusColors.surfaceMuted)
-                        .padding(4.dp)
-                ) {
-                    val countArranged = if (examsSnapshot?.phase == QueryPhase.READY) " (${arrangedExams.size})" else ""
-                    val countUnarranged = if (examsSnapshot?.phase == QueryPhase.READY) " (${unarrangedExams.size})" else ""
+                val countArranged = if (examsSnapshot?.phase == QueryPhase.READY) " (${arrangedExams.size})" else ""
+                val countUnarranged = if (examsSnapshot?.phase == QueryPhase.READY) " (${unarrangedExams.size})" else ""
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (selectedTab == ExamTab.ARRANGED) campusColors.surface else Color.Transparent)
-                            .clickable { selectedTab = ExamTab.ARRANGED }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "已安排$countArranged",
-                            fontSize = 14.sp,
-                            fontWeight = if (selectedTab == ExamTab.ARRANGED) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == ExamTab.ARRANGED) campusColors.examText else campusColors.textSecondary
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (selectedTab == ExamTab.UNARRANGED) campusColors.surface else Color.Transparent)
-                            .clickable { selectedTab = ExamTab.UNARRANGED }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "未安排$countUnarranged",
-                            fontSize = 14.sp,
-                            fontWeight = if (selectedTab == ExamTab.UNARRANGED) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == ExamTab.UNARRANGED) campusColors.brand else campusColors.textSecondary
-                        )
-                    }
+                StaggeredAppear(index = 1) {
+                    CampusSegmentedControl(
+                        options = listOf("已安排$countArranged", "未安排$countUnarranged"),
+                        selectedIndex = if (selectedTab == ExamTab.ARRANGED) 0 else 1,
+                        onSelect = { index ->
+                            selectedTab = if (index == 0) ExamTab.ARRANGED else ExamTab.UNARRANGED
+                        }
+                    )
                 }
             }
 
@@ -210,39 +172,37 @@ fun ExamsScreen(
                 ExamTab.ARRANGED -> {
                     if (arrangedExams.isEmpty() && examsSnapshot?.phase == QueryPhase.READY) {
                         item {
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 40.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(vertical = CampusSpacing.xxl),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "该学期暂无已安排考试",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = campusColors.textPrimary
-                                    )
-                                    Text(
-                                        text = "当前查询未返回已安排考试，可查看“未安排”选项",
-                                        fontSize = 13.sp,
-                                        color = campusColors.textSecondary,
-                                        modifier = Modifier.padding(top = 6.dp)
-                                    )
-                                }
+                                Text(
+                                    text = "该学期暂无已安排考试",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = "当前查询未返回已安排考试，可查看“未安排”选项",
+                                    fontSize = 13.sp,
+                                    color = colors.textSecondary,
+                                    modifier = Modifier.padding(top = CampusSpacing.xs - 2.dp)
+                                )
                             }
                         }
                     } else {
-                        items(arrangedExams) { exam ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, exam))
-                                    },
-                                insideMargin = PaddingValues(16.dp)
+                        itemsIndexed(arrangedExams) { index, exam ->
+                            StaggeredAppear(
+                                index = index + 2,
+                                modifier = Modifier.animateItem()
                             ) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
+                                CampusCard(
+                                    onClick = {
+                                        AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, exam))
+                                    }
+                                ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -252,65 +212,60 @@ fun ExamsScreen(
                                             text = exam.courseName,
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = campusColors.textPrimary,
+                                            color = colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f)
                                         )
 
                                         if (!exam.seat.isNullOrBlank()) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(campusColors.examLight)
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(
-                                                    text = "${exam.seat} 座",
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = campusColors.examText
-                                                )
-                                            }
+                                            CampusPill(
+                                                text = "${exam.seat} 座",
+                                                contentColor = colors.examForeground,
+                                                containerColor = colors.examContainer,
+                                                modifier = Modifier.padding(start = CampusSpacing.xs)
+                                            )
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(CampusSpacing.sm))
 
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.DateRange,
+                                            imageVector = MiuixIcons.Regular.Months,
                                             contentDescription = null,
-                                            tint = campusColors.textSecondary,
+                                            tint = colors.textTertiary,
                                             modifier = Modifier.size(15.dp)
                                         )
                                         Text(
                                             text = exam.timeDescription ?: "考试时间待定",
                                             fontSize = 13.sp,
-                                            color = campusColors.textSecondary,
-                                            modifier = Modifier.padding(start = 6.dp)
+                                            color = colors.textSecondary,
+                                            modifier = Modifier.padding(start = CampusSpacing.xs - 2.dp)
                                         )
                                     }
 
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(CampusSpacing.xs - 2.dp))
 
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.LocationOn,
+                                            imageVector = MiuixIcons.Regular.Location,
                                             contentDescription = null,
-                                            tint = campusColors.textSecondary,
+                                            tint = colors.textTertiary,
                                             modifier = Modifier.size(15.dp)
                                         )
                                         Text(
                                             text = exam.place ?: "考场地点尚未公布",
                                             fontSize = 13.sp,
-                                            color = campusColors.textPrimary,
+                                            color = colors.textPrimary,
                                             fontWeight = FontWeight.Medium,
-                                            modifier = Modifier.padding(start = 6.dp)
+                                            modifier = Modifier.padding(start = CampusSpacing.xs - 2.dp)
                                         )
                                     }
                                 }
@@ -324,56 +279,64 @@ fun ExamsScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 40.dp),
+                                    .padding(vertical = CampusSpacing.xxl),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = "暂无未安排考试记录",
                                     fontSize = 14.sp,
-                                    color = campusColors.textSecondary
+                                    color = colors.textSecondary
                                 )
                             }
                         }
                     } else {
-                        items(unarrangedExams) { exam ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
+                        itemsIndexed(unarrangedExams) { index, exam ->
+                            StaggeredAppear(
+                                index = index + 2,
+                                modifier = Modifier.animateItem()
+                            ) {
+                                CampusCard(
+                                    onClick = {
                                         AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, exam))
                                     },
-                                insideMargin = PaddingValues(16.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    contentPadding = PaddingValues(CampusSpacing.sm + 2.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = exam.courseName,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = campusColors.textPrimary
-                                        )
-                                        Text(
-                                            text = exam.status ?: "随堂考查或尚未统一安排考场",
-                                            fontSize = 12.sp,
-                                            color = campusColors.textSecondary,
-                                            modifier = Modifier.padding(top = 4.dp)
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(campusColors.surfaceMuted)
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                                     ) {
-                                        Text(
-                                            text = "未排考",
-                                            fontSize = 11.sp,
-                                            color = campusColors.textSecondary
+                                        CampusIconBadge(
+                                            icon = MiuixIcons.Regular.Alarm,
+                                            tint = colors.examForeground,
+                                            container = colors.examContainer,
+                                            size = 40.dp,
+                                            iconSize = 20.dp,
+                                            cornerRadius = CampusShapes.extraSmall
                                         )
+
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(CampusSpacing.xxs)
+                                        ) {
+                                            Text(
+                                                text = exam.courseName,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = colors.textPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = exam.status ?: "随堂考查或尚未统一安排考场",
+                                                fontSize = 12.sp,
+                                                color = colors.textSecondary,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        CampusPill(text = "未排考")
                                     }
                                 }
                             }
@@ -381,8 +344,6 @@ fun ExamsScreen(
                     }
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
     }
 
@@ -397,30 +358,24 @@ fun ExamsScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 380.dp)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .heightIn(max = 380.dp),
+                contentPadding = PaddingValues(CampusSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
-                items(terms) { t ->
+                itemsIndexed(terms) { index, t ->
                     val isSelected = t.id == currentTerm?.id
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) campusColors.brandContainer else campusColors.surfaceMuted)
-                            .clickable {
+                    StaggeredAppear(
+                        index = index,
+                        key = terms.size,
+                        modifier = Modifier.animateItem()
+                    ) {
+                        CampusSelectionRow(
+                            title = t.name + if (t.isCurrent) " (当前)" else "",
+                            selected = isSelected,
+                            onClick = {
                                 selectedTermId = t.id
                                 showTermPicker = false
                             }
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = t.name + if (t.isCurrent) " (当前)" else "",
-                            fontSize = 15.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) campusColors.brand else campusColors.textPrimary
                         )
                     }
                 }

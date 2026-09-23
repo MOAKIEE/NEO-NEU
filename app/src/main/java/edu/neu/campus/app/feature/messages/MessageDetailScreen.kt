@@ -22,7 +22,14 @@ import edu.neu.campus.app.CampusDataProvider
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusTopBar
-import edu.neu.campus.ui.theme.LocalCampusColors
+import edu.neu.campus.ui.components.CampusCard
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusPageEnter
+import edu.neu.campus.ui.components.CampusPill
+import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
+import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -37,7 +44,6 @@ fun MessageDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val campusColors = LocalCampusColors.current
     val messagesSnapshot by CampusDataProvider.portal.messages(page = page, pageSize = 30, status = status).collectAsState()
 
     // 查找目标消息
@@ -53,10 +59,11 @@ fun MessageDetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(campusColors.background)
+            .background(CampusTheme.colors.background)
     ) {
         CampusTopBar(
             title = "通知详情",
+            subtitle = "门户来源与本机已读状态",
             onBack = onBack
         )
 
@@ -65,7 +72,7 @@ fun MessageDetailScreen(
                 Text(
                     text = if (messageId.isBlank()) "请选择具体消息查看" else "未找到该消息或本地缓存已过期",
                     fontSize = 15.sp,
-                    color = campusColors.textSecondary
+                    color = CampusTheme.colors.textSecondary
                 )
             }
             return
@@ -79,16 +86,13 @@ fun MessageDetailScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 1. 标题与元数据卡
-            Card(
-                insideMargin = PaddingValues(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            CampusCard(contentPadding = PaddingValues(CampusSpacing.lg)) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         text = message.title,
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
-                        color = campusColors.textPrimary,
+                        color = CampusTheme.colors.textPrimary,
                         lineHeight = 26.sp
                     )
 
@@ -97,10 +101,10 @@ fun MessageDetailScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
+                        CampusPill(
                             text = "来源：${message.source ?: "智慧东大门户"}",
-                            fontSize = 12.sp,
-                            color = campusColors.textSecondary
+                            contentColor = CampusTheme.colors.brand,
+                            containerColor = CampusTheme.colors.brandContainer
                         )
 
                         val msgTime = message.time
@@ -108,7 +112,7 @@ fun MessageDetailScreen(
                             Text(
                                 text = msgTime,
                                 fontSize = 12.sp,
-                                color = campusColors.textSecondary
+                                color = CampusTheme.colors.textSecondary
                             )
                         }
                     }
@@ -120,15 +124,11 @@ fun MessageDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val serverStateText = when (message.serverRead) { true -> "学校状态：已读"; false -> "学校状态：未读"; null -> "学校状态：未提供" }
-                        Text(
-                            text = serverStateText,
-                            fontSize = 11.sp,
-                            color = campusColors.textSecondary
-                        )
-                        Text(
+                        CampusPill(text = serverStateText)
+                        CampusPill(
                             text = "已在本机查看",
-                            fontSize = 11.sp,
-                            color = campusColors.brand
+                            contentColor = CampusTheme.colors.success,
+                            containerColor = CampusTheme.colors.successContainer
                         )
                     }
                 }
@@ -148,14 +148,14 @@ fun MessageDetailScreen(
                                 Text(
                                     text = "（该通知无附加正文内容）",
                                     fontSize = 14.sp,
-                                    color = campusColors.textSecondary
+                                    color = CampusTheme.colors.textSecondary
                                 )
                             } else {
                                 message.contentLines.forEach { line ->
                                     Text(
                                         text = line,
                                         fontSize = 15.sp,
-                                        color = campusColors.textPrimary,
+                                        color = CampusTheme.colors.textPrimary,
                                         lineHeight = 24.sp
                                     )
                                 }
@@ -177,7 +177,7 @@ fun MessageDetailScreen(
                         Text(
                             text = "如需查看附件、填写表单或在学校网站标记已读，请前往智慧东大官方门户。",
                             fontSize = 12.sp,
-                            color = campusColors.textSecondary,
+                            color = CampusTheme.colors.textSecondary,
                             lineHeight = 18.sp
                         )
 

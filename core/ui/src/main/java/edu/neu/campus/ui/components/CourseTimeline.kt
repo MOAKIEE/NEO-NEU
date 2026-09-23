@@ -107,9 +107,8 @@ fun CourseTimeline(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(CampusShapes.extraSmall))
+                                .tapScale(onClick = { onCourseClick(course) }, pressedScale = 0.985f, clipShape = RoundedCornerShape(CampusShapes.extraSmall))
                                 .background(rowBg)
-                                .tapScale(onClick = { onCourseClick(course) }, pressedScale = 0.985f)
                                 .padding(vertical = 7.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -242,8 +241,7 @@ fun CourseTimeline(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(CampusShapes.extraSmall))
-                            .tapScale(onClick = onSeeAllClick, pressedScale = 0.97f)
+                            .tapScale(onClick = onSeeAllClick, pressedScale = 0.97f, clipShape = RoundedCornerShape(CampusShapes.extraSmall))
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {

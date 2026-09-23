@@ -7,19 +7,13 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -30,20 +24,30 @@ import edu.neu.campus.contract.CampusTask
 import edu.neu.campus.contract.QueryErrorKind
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.contract.TaskKind
+import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusGroupDivider
-import edu.neu.campus.ui.components.CampusSection
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusSegmentedControl
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
-import edu.neu.campus.ui.theme.LocalCampusColors
+import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.components.tapScale
+import edu.neu.campus.ui.theme.CampusSpacing
+import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Report
+import top.yukonga.miuix.kmp.icon.extended.Send
+import top.yukonga.miuix.kmp.icon.extended.Tasks
 
 @Composable
 fun TasksScreen(
@@ -52,10 +56,16 @@ fun TasksScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val campusColors = LocalCampusColors.current
+    val campusColors = CampusTheme.colors
 
     var activeTab by rememberSaveable { mutableStateOf(TaskKind.TODO) }
     var inspectingTask by remember { mutableStateOf<CampusTask?>(null) }
+
+    val taskTabs = listOf(
+        TaskKind.TODO to "待办事项",
+        TaskKind.DONE to "已办事项",
+        TaskKind.APPLICATION to "我的申请"
+    )
 
     LaunchedEffect(activeTab) { CampusDataProvider.portal.refreshTasks(activeTab, 1, 20) }
 
@@ -70,6 +80,7 @@ fun TasksScreen(
     ) {
         CampusTopBar(
             title = "待办与申请",
+            subtitle = "待办与申请状态（只读）",
             onBack = onBack,
             actions = {
                 IconButton(
@@ -81,7 +92,7 @@ fun TasksScreen(
                     enabled = !isRefreshing
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = MiuixIcons.Regular.Refresh,
                         contentDescription = "刷新",
                         tint = if (isRefreshing) campusColors.textSecondary else campusColors.brand
                     )
@@ -91,39 +102,13 @@ fun TasksScreen(
 
         if (tasksSnapshot.isStale) SafeDataTag(text = "显示上次同步待办，可能已变化")
 
-        // 分段切换胶囊：待办事项 / 已办事项 / 我的申请
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(campusColors.surfaceMuted)
-                .padding(4.dp)
-        ) {
-            listOf(
-                TaskKind.TODO to "待办事项",
-                TaskKind.DONE to "已办事项",
-                TaskKind.APPLICATION to "我的申请"
-            ).forEach { (kind, label) ->
-                val isSelected = activeTab == kind
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) campusColors.surface else Color.Transparent)
-                        .clickable { activeTab = kind }
-                        .padding(vertical = 9.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = label,
-                        fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) campusColors.brand else campusColors.textSecondary
-                    )
-                }
-            }
-        }
+        // 分段切换：待办事项 / 已办事项 / 我的申请
+        CampusSegmentedControl(
+            options = taskTabs.map { it.second },
+            selectedIndex = taskTabs.indexOfFirst { it.first == activeTab }.coerceAtLeast(0),
+            onSelect = { index -> activeTab = taskTabs[index].first },
+            modifier = Modifier.padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs)
+        )
 
         // 内容展示区
         Box(
@@ -171,14 +156,20 @@ fun TasksScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding = PaddingValues(CampusSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                     ) {
-                        items(taskList, key = { it.id }) { task ->
-                            TaskItemCard(
-                                task = task,
-                                onClick = { inspectingTask = task }
-                            )
+                        itemsIndexed(taskList, key = { _, task -> task.id }) { index, task ->
+                            StaggeredAppear(
+                                index = index,
+                                key = taskList.size,
+                                modifier = Modifier.animateItem()
+                            ) {
+                                TaskItemCard(
+                                    task = task,
+                                    onClick = { inspectingTask = task }
+                                )
+                            }
                         }
                     }
                 }
@@ -202,79 +193,97 @@ private fun TaskItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val campusColors = LocalCampusColors.current
-    Card(
-        insideMargin = PaddingValues(16.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+    val campusColors = CampusTheme.colors
+    val badgeIcon = when (task.kind) {
+        TaskKind.TODO -> MiuixIcons.Regular.Tasks
+        TaskKind.DONE -> MiuixIcons.Regular.Ok
+        TaskKind.APPLICATION -> MiuixIcons.Regular.Send
+    }
+    val badgeTint = when (task.kind) {
+        TaskKind.TODO -> campusColors.brand
+        TaskKind.DONE -> campusColors.success
+        TaskKind.APPLICATION -> campusColors.gradeForeground
+    }
+    val badgeContainer = when (task.kind) {
+        TaskKind.TODO -> campusColors.brandContainer
+        TaskKind.DONE -> campusColors.successContainer
+        TaskKind.APPLICATION -> campusColors.gradeContainer
+    }
+
+    CampusCard(onClick = onClick, modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+        ) {
+            CampusIconBadge(
+                icon = badgeIcon,
+                tint = badgeTint,
+                container = badgeContainer,
+                size = 40.dp,
+                iconSize = 20.dp
+            )
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Text(
                     text = task.title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = campusColors.textPrimary,
-                    modifier = Modifier.weight(1f)
+                    maxLines = 2
                 )
 
-                Text(
-                    text = "查看 ›",
-                    fontSize = 13.sp,
-                    color = campusColors.brand,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "来源：智慧东大办公门户",
-                    fontSize = 12.sp,
-                    color = campusColors.textSecondary
-                )
-
-                val tTime = task.time
-                if (tTime != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
+                ) {
                     Text(
-                        text = tTime,
+                        text = "来源：智慧东大办公门户",
                         fontSize = 12.sp,
                         color = campusColors.textSecondary
                     )
+
+                    val tTime = task.time
+                    if (tTime != null) {
+                        Text(
+                            text = tTime,
+                            fontSize = 12.sp,
+                            color = campusColors.textTertiary
+                        )
+                    }
                 }
             }
+
+            Text(
+                text = "查看 ›",
+                fontSize = 13.sp,
+                color = campusColors.brand,
+                modifier = Modifier.padding(start = CampusSpacing.xxs)
+            )
         }
     }
 }
 
 @Composable
 private fun SchemaChangedCard(context: Context) {
-    val campusColors = LocalCampusColors.current
+    val campusColors = CampusTheme.colors
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(CampusSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
     ) {
-        Card(
-            insideMargin = PaddingValues(20.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        CampusCard(contentPadding = PaddingValues(CampusSpacing.lg)) {
+            Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Warning,
+                        imageVector = MiuixIcons.Regular.Report,
                         contentDescription = "警示",
                         tint = campusColors.warning,
                         modifier = Modifier.size(24.dp)
@@ -302,7 +311,7 @@ private fun SchemaChangedCard(context: Context) {
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                 ) {
                     Button(
                         onClick = {
@@ -341,22 +350,19 @@ private fun TaskDetailDialog(
     context: Context,
     onDismiss: () -> Unit
 ) {
-    val campusColors = LocalCampusColors.current
+    val campusColors = CampusTheme.colors
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(onClick = onDismiss)
-            .padding(24.dp),
+            .tapScale(onClick = onDismiss)
+            .padding(CampusSpacing.xl),
         contentAlignment = Alignment.Center
     ) {
-        Card(
-            insideMargin = PaddingValues(20.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = false) {}
+        CampusCard(
+            contentPadding = PaddingValues(CampusSpacing.lg)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                 Text(
                     text = task.title,
                     fontSize = 18.sp,
@@ -383,7 +389,7 @@ private fun TaskDetailDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                 ) {
                     Button(
                         onClick = {
@@ -414,11 +420,11 @@ private fun TaskDetailDialog(
 
 @Composable
 private fun DetailRow(label: String, value: String) {
-    val campusColors = LocalCampusColors.current
+    val campusColors = CampusTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = CampusSpacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

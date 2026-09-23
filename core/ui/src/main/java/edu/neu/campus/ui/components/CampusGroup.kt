@@ -47,10 +47,9 @@ fun CampusGroup(
         modifier = Modifier
             .fillMaxWidth()
             .then(modifier)
-            .clip(RoundedCornerShape(cornerRadius))
+            .tapScale(onClick = onClick, pressedScale = 0.985f, clipShape = RoundedCornerShape(cornerRadius))
             .background(containerColor)
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(cornerRadius))
-            .tapScale(onClick = onClick, pressedScale = 0.985f)
             .padding(contentPadding)
     ) {
         Column(
@@ -107,8 +106,7 @@ fun CampusSection(
             if (actionText != null && onActionClick != null) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(CampusShapes.pill))
-                        .tapScale(onClick = onActionClick, pressedScale = 0.94f)
+                        .tapScale(onClick = onActionClick, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.pill))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(

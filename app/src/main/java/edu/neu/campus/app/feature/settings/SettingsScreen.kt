@@ -405,14 +405,13 @@ fun SettingsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(CampusShapes.large))
+                        .tapScale(onClick = { showSignOutConfirm = true }, pressedScale = 0.98f, clipShape = RoundedCornerShape(CampusShapes.large))
                         .background(colors.errorContainer)
                         .border(
                             width = 1.dp,
                             color = colors.error.copy(alpha = 0.25f),
                             shape = RoundedCornerShape(CampusShapes.large)
                         )
-                        .tapScale(onClick = { showSignOutConfirm = true }, pressedScale = 0.98f)
                         .padding(CampusSpacing.md),
                     contentAlignment = Alignment.Center
                 ) {

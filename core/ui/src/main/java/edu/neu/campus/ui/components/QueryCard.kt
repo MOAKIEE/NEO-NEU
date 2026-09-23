@@ -78,8 +78,7 @@ fun QueryCard(
                         if (actionText != null && onActionClick != null) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(CampusShapes.pill))
-                                    .tapScale(onClick = onActionClick, pressedScale = 0.94f)
+                                    .tapScale(onClick = onActionClick, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.pill))
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text(

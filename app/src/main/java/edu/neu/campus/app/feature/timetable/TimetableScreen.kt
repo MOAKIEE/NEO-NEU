@@ -294,8 +294,7 @@ fun TimetableScreen(
             if (unscheduledCount > 0) {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(CampusShapes.pill))
-                        .tapScale(onClick = { showUnscheduledSheet = true }, pressedScale = 0.95f)
+                        .tapScale(onClick = { showUnscheduledSheet = true }, pressedScale = 0.95f, clipShape = RoundedCornerShape(CampusShapes.pill))
                         .padding(vertical = 4.dp, horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -590,9 +589,8 @@ private fun ViewModeToggle(
     val colors = CampusTheme.colors
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(CampusShapes.pill))
+            .tapScale(onClick = onToggle, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.pill))
             .background(colors.brandContainer)
-            .tapScale(onClick = onToggle, pressedScale = 0.94f)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -663,9 +661,8 @@ private fun WeekController(
 
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(CampusShapes.pill))
+                    .tapScale(onClick = onPickWeek, pressedScale = 0.95f, clipShape = RoundedCornerShape(CampusShapes.pill))
                     .background(colors.brandContainer)
-                    .tapScale(onClick = onPickWeek, pressedScale = 0.95f)
                     .padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -708,9 +705,8 @@ private fun WeekController(
         ) {
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(CampusShapes.pill))
+                    .tapScale(onClick = onBackToCurrent, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.pill))
                     .background(colors.brand)
-                    .tapScale(onClick = onBackToCurrent, pressedScale = 0.94f)
                     .padding(horizontal = CampusSpacing.sm + 2.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)

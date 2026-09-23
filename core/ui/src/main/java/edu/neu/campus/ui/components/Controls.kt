@@ -1,25 +1,19 @@
 package edu.neu.campus.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.ui.state.ToggleableState
+import edu.neu.campus.ui.theme.CampusTheme
+import top.yukonga.miuix.kmp.basic.Checkbox
+import top.yukonga.miuix.kmp.basic.CheckboxDefaults
+import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.SwitchDefaults
 
 /**
- * 契合 Miuix 设计风格的原生开关与多选框控件。
+ * 项目统一开关。
+ *
+ * 直接复用 Miuix [Switch]，保留其拖拽、回弹与触觉反馈动效，
+ * 仅覆盖轨道与滑块颜色以匹配项目语义色，避免各处自行绘制开关。
  */
 @Composable
 fun CampusSwitch(
@@ -27,56 +21,53 @@ fun CampusSwitch(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
-    val bgColor by animateColorAsState(
-        targetValue = if (checked) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer,
-        label = "switchBg"
+    val colors = CampusTheme.colors
+    val switchColors = SwitchDefaults.switchColors(
+        checkedThumbColor = colors.onBrand,
+        uncheckedThumbColor = colors.surface,
+        disabledCheckedThumbColor = colors.textDisabled,
+        disabledUncheckedThumbColor = colors.textDisabled,
+        checkedTrackColor = colors.brand,
+        uncheckedTrackColor = colors.surfaceSunken,
+        disabledCheckedTrackColor = colors.brandContainer,
+        disabledUncheckedTrackColor = colors.surfaceMuted
     )
-
-    Box(
-        modifier = modifier
-            .width(46.dp)
-            .height(26.dp)
-            .clip(RoundedCornerShape(13.dp))
-            .background(bgColor)
-            .clickable(enabled = onCheckedChange != null) { onCheckedChange?.invoke(!checked) }
-            .padding(3.dp),
-        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart
-    ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(MiuixTheme.colorScheme.surface)
-        )
-    }
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        colors = switchColors,
+        enabled = onCheckedChange != null
+    )
 }
 
+/**
+ * 项目统一复选框。
+ *
+ * 复用 Miuix [Checkbox] 的勾选过渡与触觉反馈，颜色对齐品牌语义色。
+ */
 @Composable
 fun CampusCheckbox(
     checked: Boolean,
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
-    val bgColor by animateColorAsState(
-        targetValue = if (checked) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer,
-        label = "checkboxBg"
+    val colors = CampusTheme.colors
+    val checkboxColors = CheckboxDefaults.checkboxColors(
+        checkedForegroundColor = colors.onBrand,
+        uncheckedForegroundColor = colors.surface,
+        disabledCheckedForegroundColor = colors.textDisabled,
+        disabledUncheckedForegroundColor = colors.textDisabled,
+        checkedBackgroundColor = colors.brand,
+        uncheckedBackgroundColor = colors.surfaceSunken,
+        disabledCheckedBackgroundColor = colors.brandContainer,
+        disabledUncheckedBackgroundColor = colors.surfaceMuted
     )
-
-    Box(
-        modifier = modifier
-            .size(22.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(bgColor)
-            .clickable(enabled = onCheckedChange != null) { onCheckedChange?.invoke(!checked) },
-        contentAlignment = Alignment.Center
-    ) {
-        if (checked) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-    }
+    Checkbox(
+        state = if (checked) ToggleableState.On else ToggleableState.Off,
+        onClick = onCheckedChange?.let { callback -> { callback(!checked) } },
+        modifier = modifier,
+        colors = checkboxColors,
+        enabled = onCheckedChange != null
+    )
 }

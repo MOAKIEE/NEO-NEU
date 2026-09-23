@@ -1,18 +1,12 @@
 package edu.neu.campus.app.feature.messages
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -27,15 +21,25 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.CampusMessage
 import edu.neu.campus.contract.QueryPhase
+import edu.neu.campus.ui.components.CampusCard
+import edu.neu.campus.ui.components.CampusFilterChip
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusPill
+import edu.neu.campus.ui.components.CampusSegmentedControl
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
-import edu.neu.campus.ui.theme.LocalCampusColors
+import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.theme.CampusSpacing
+import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Email
+import top.yukonga.miuix.kmp.icon.extended.Messages
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 
 enum class MessageSourceFilter(val label: String) {
     ALL("全部来源"),
@@ -54,7 +58,7 @@ fun MessagesScreen(
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val campusColors = LocalCampusColors.current
+    val colors = CampusTheme.colors
     var sourceFilter by rememberSaveable { mutableStateOf(MessageSourceFilter.ALL) }
     var statusFilter by rememberSaveable { mutableStateOf(MessageStatusFilter.ALL) }
     var page by rememberSaveable { mutableStateOf(1) }
@@ -87,11 +91,12 @@ fun MessagesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(campusColors.background)
+            .background(colors.background)
     ) {
         CampusTopBar(
             title = "消息中心",
             onBack = onBack,
+            subtitle = "门户消息与本机已读状态",
             actions = {
                 IconButton(
                     onClick = {
@@ -102,16 +107,16 @@ fun MessagesScreen(
                     enabled = !isRefreshing
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = MiuixIcons.Regular.Refresh,
                         contentDescription = "刷新",
-                        tint = if (isRefreshing) campusColors.textSecondary else campusColors.brand
+                        tint = if (isRefreshing) colors.textSecondary else colors.brand
                     )
                 }
             }
         )
 
         // 规范要求的提示说明条
-        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xxs)) {
             SafeDataTag(text = "在此查看消息不会改变学校网站上的已读状态")
         }
 
@@ -119,50 +124,54 @@ fun MessagesScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs - 2.dp),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
         ) {
             // 来源筛选
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
                 MessageSourceFilter.entries.forEach { f ->
-                    FilterChip(
-                        label = f.label,
-                        isSelected = f == sourceFilter,
+                    CampusFilterChip(
+                        text = f.label,
+                        active = f == sourceFilter,
                         onClick = { sourceFilter = f }
                     )
                 }
             }
 
             // 状态筛选
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                MessageStatusFilter.entries.forEach { f ->
-                    FilterChip(
-                        label = f.label,
-                        isSelected = f == statusFilter,
-                        onClick = { statusFilter = f; page = 1 }
-                    )
+            CampusSegmentedControl(
+                options = MessageStatusFilter.entries.map { it.label },
+                selectedIndex = MessageStatusFilter.entries.indexOf(statusFilter).coerceAtLeast(0),
+                onSelect = { index ->
+                    statusFilter = MessageStatusFilter.entries[index]
+                    page = 1
                 }
-            }
+            )
         }
 
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CampusSpacing.screenHorizontal),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             top.yukonga.miuix.kmp.basic.Button(onClick = { page-- }, enabled = page > 1 && !isRefreshing) { Text("上一页") }
-            Text("第 $page 页 · 门户")
+            Text("第 $page 页 · 门户", fontSize = 13.sp, color = colors.textSecondary)
             val total = messagesSnapshot.data?.total
             val hasNext = if (total != null) page * 30 < total else allMessages.size == 30
             top.yukonga.miuix.kmp.basic.Button(onClick = { page++ }, enabled = hasNext && !isRefreshing) { Text("下一页") }
         }
-        if (messagesSnapshot.isStale) SafeDataTag(text = "显示上次同步消息，可能已变化")
+        if (messagesSnapshot.isStale) {
+            Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal)) {
+                SafeDataTag(text = "显示上次同步消息，可能已变化")
+            }
+        }
         // 消息列表与状态展示
         Box(
             modifier = Modifier
@@ -193,17 +202,23 @@ fun MessagesScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding = PaddingValues(CampusSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs + 2.dp)
                     ) {
-                        items(filteredMessages, key = { it.id }) { msg ->
-                            MessageItemCard(
-                                message = msg,
-                                onClick = {
-                                    MessagesManager.markAsLocalRead(msg.id)
-                                    AppNavigator.navigateTo(AppDestination.MessageDetail(msg.id, page, status))
-                                }
-                            )
+                        itemsIndexed(filteredMessages, key = { _, item -> item.id }) { index, msg ->
+                            StaggeredAppear(
+                                index = index,
+                                key = statusFilter,
+                                modifier = Modifier.animateItem()
+                            ) {
+                                MessageItemCard(
+                                    message = msg,
+                                    onClick = {
+                                        MessagesManager.markAsLocalRead(msg.id)
+                                        AppNavigator.navigateTo(AppDestination.MessageDetail(msg.id, page, status))
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -218,43 +233,35 @@ private fun MessageItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val campusColors = LocalCampusColors.current
+    val colors = CampusTheme.colors
     val isLocalRead = MessagesManager.isLocalRead(message.id)
     val isServerUnread = message.serverRead == false
     val summary = message.contentLines.firstOrNull()?.trim() ?: ""
 
     val isAcademic = message.source?.contains("教务") == true || message.source?.contains("academic") == true
 
-    Card(
-        insideMargin = PaddingValues(16.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+    CampusCard(
+        modifier = modifier,
+        onClick = onClick,
+        contentPadding = PaddingValues(CampusSpacing.sm + 2.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm),
             verticalAlignment = Alignment.Top
         ) {
             // 左侧 40dp 来源图标
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (isAcademic) campusColors.brandContainer else campusColors.messageLight),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isAcademic) Icons.Default.Email else Icons.Default.Notifications,
-                    contentDescription = null,
-                    tint = if (isAcademic) campusColors.brand else campusColors.messageText,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            CampusIconBadge(
+                icon = if (isAcademic) MiuixIcons.Regular.Email else MiuixIcons.Regular.Messages,
+                tint = if (isAcademic) colors.brand else colors.messageForeground,
+                container = if (isAcademic) colors.brandContainer else colors.messageContainer,
+                size = 40.dp,
+                iconSize = 20.dp
+            )
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs - 2.dp)
             ) {
                 // 标题行与时间
                 Row(
@@ -265,14 +272,14 @@ private fun MessageItemCard(
                     Row(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs - 2.dp)
                     ) {
                         if (isServerUnread && !isLocalRead) {
                             Box(
                                 modifier = Modifier
                                     .size(7.dp)
                                     .clip(CircleShape)
-                                    .background(campusColors.error)
+                                    .background(colors.error)
                             )
                         }
 
@@ -280,7 +287,7 @@ private fun MessageItemCard(
                             text = message.title,
                             fontSize = 15.sp,
                             fontWeight = if (isServerUnread && !isLocalRead) FontWeight.Bold else FontWeight.Medium,
-                            color = campusColors.textPrimary,
+                            color = colors.textPrimary,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -291,8 +298,8 @@ private fun MessageItemCard(
                         Text(
                             text = msgTime,
                             fontSize = 11.sp,
-                            color = campusColors.textSecondary,
-                            modifier = Modifier.padding(start = 6.dp)
+                            color = colors.textTertiary,
+                            modifier = Modifier.padding(start = CampusSpacing.xs - 2.dp)
                         )
                     }
                 }
@@ -302,7 +309,7 @@ private fun MessageItemCard(
                     Text(
                         text = summary,
                         fontSize = 13.sp,
-                        color = campusColors.textSecondary,
+                        color = colors.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -318,50 +325,24 @@ private fun MessageItemCard(
                     Text(
                         text = sourceLabel,
                         fontSize = 11.sp,
-                        color = campusColors.textSecondary
+                        color = colors.textTertiary
                     )
 
                     if (isServerUnread) {
-                        Text(
-                            text = if (isLocalRead) "学校未读 (本机已查)" else "未读",
-                            fontSize = 11.sp,
-                            color = if (isLocalRead) campusColors.textSecondary else campusColors.brand
-                        )
+                        if (isLocalRead) {
+                            CampusPill(text = "学校未读 (本机已查)")
+                        } else {
+                            CampusPill(
+                                text = "未读",
+                                contentColor = colors.brand,
+                                containerColor = colors.brandContainer
+                            )
+                        }
                     } else {
-                        Text(
-                            text = "已读",
-                            fontSize = 11.sp,
-                            color = campusColors.textSecondary
-                        )
+                        CampusPill(text = "已读")
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun FilterChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val campusColors = LocalCampusColors.current
-    val bg = if (isSelected) campusColors.brandContainer else campusColors.surfaceMuted
-    val textColor = if (isSelected) campusColors.brand else campusColors.textSecondary
-
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            color = textColor
-        )
     }
 }

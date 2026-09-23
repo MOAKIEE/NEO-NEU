@@ -1,24 +1,20 @@
 package edu.neu.campus.app.feature.grades
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
@@ -26,6 +22,8 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.*
 import edu.neu.campus.ui.components.*
+import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
@@ -33,6 +31,10 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Favorites
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 
 enum class GradeSortOrder(val label: String) {
@@ -43,10 +45,12 @@ enum class GradeSortOrder(val label: String) {
 
 /**
  * 成绩查询页面。
+ *
  * 组件约定：
- * - 紧凑标题栏 -> 浅紫统计卡 -> 学期选择/排序 -> 本地搜索 -> 成绩列表
- * - 统计卡大数字 32-38sp，官方口径说明与最近同步时间
- * - 左右结构成绩行：左侧课程名与学分，右侧 24sp 成绩与官方绩点
+ * - 紧凑标题栏 -> 成绩功能色统计卡 -> 学期选择/排序 -> 本地搜索 -> 成绩列表
+ * - 统计卡大数字使用数字滚动动画，并注明官方口径与最近同步时间
+ * - 左右结构成绩行：左侧课程名与学分标签，右侧大号成绩与官方绩点
+ * - 学期抽屉使用统一的选中行样式并逐项入场
  */
 @Composable
 fun GradesScreen(
@@ -105,23 +109,37 @@ fun GradesScreen(
     ) {
         CampusTopBar(
             title = "成绩查询",
+            subtitle = activeTermId.ifBlank { "官方原始成绩与绩点" },
             onBack = onBack
         )
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = CampusSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.md),
+            contentPadding = PaddingValues(bottom = CampusSpacing.xxl)
         ) {
-            // 1. 独立统计卡：浅紫背景，官方总平均学分绩点
+            // 1. 官方总平均学分绩点统计卡
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(colors.gradeContainer)
-                        .padding(20.dp)
+                        .clip(RoundedCornerShape(CampusShapes.extraLarge))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    colors.gradeContainer,
+                                    colors.gradeContainer.copy(alpha = if (colors.isDark) 0.55f else 0.7f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = colors.gradeForeground.copy(alpha = 0.16f),
+                            shape = RoundedCornerShape(CampusShapes.extraLarge)
+                        )
+                        .padding(CampusSpacing.lg)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -135,11 +153,12 @@ fun GradesScreen(
                                 fontWeight = FontWeight.Medium,
                                 color = colors.gradeForeground
                             )
-                            val gpaVal = gradeSummarySnapshot.data?.officialGpa ?: "—.—"
-                            Text(
-                                text = gpaVal,
+                            val gpaVal = gradeSummarySnapshot.data?.officialGpa
+                            AnimatedNumber(
+                                target = gpaVal?.toFloatOrNull(),
+                                fallback = gpaVal ?: "—.—",
+                                decimals = 2,
                                 fontSize = 36.sp,
-                                lineHeight = 42.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.gradeForeground
                             )
@@ -151,33 +170,42 @@ fun GradesScreen(
                             )
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = if (colors.isDark) 0.12f else 0.7f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = null,
-                                tint = colors.gradeForeground,
-                                modifier = Modifier.size(30.dp)
-                            )
-                        }
+                        CampusIconBadge(
+                            icon = MiuixIcons.Regular.Favorites,
+                            tint = colors.gradeForeground,
+                            container = Color.White.copy(alpha = if (colors.isDark) 0.12f else 0.75f),
+                            size = 54.dp,
+                            iconSize = 28.dp,
+                            cornerRadius = CampusShapes.medium
+                        )
                     }
                 }
             }
 
             if (gradeSummarySnapshot.error != null) item {
-                LoadStatePanel(false, error = gradeSummarySnapshot.error,
-                    onRetry = { coroutineScope.launch { academic.refreshGradeSummary() } }, onLogin = onLoginClick)
+                CampusCard {
+                    LoadStatePanel(
+                        false, error = gradeSummarySnapshot.error,
+                        onRetry = { coroutineScope.launch { academic.refreshGradeSummary() } },
+                        onLogin = onLoginClick
+                    )
+                }
             }
             if (gradeSummarySnapshot.isStale) item { SafeDataTag(text = "绩点为上次同步数据") }
             if (termsSnapshot.error != null || gradeTermIdsSnapshot.error != null) item {
-                LoadStatePanel(false, error = gradeTermIdsSnapshot.error ?: termsSnapshot.error,
-                    onRetry = { coroutineScope.launch { academic.refreshTerms(); academic.refreshGradeTermIds() } }, onLogin = onLoginClick)
+                CampusCard {
+                    LoadStatePanel(
+                        false, error = gradeTermIdsSnapshot.error ?: termsSnapshot.error,
+                        onRetry = {
+                            coroutineScope.launch {
+                                academic.refreshTerms(); academic.refreshGradeTermIds()
+                            }
+                        },
+                        onLogin = onLoginClick
+                    )
+                }
             }
+
             // 2. 学期选择与排序
             item {
                 Row(
@@ -185,41 +213,19 @@ fun GradesScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.surface)
-                            .clickable { showTermPicker = true }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (activeTermId.isBlank()) "暂无可选学期" else activeTermId,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textPrimary
-                        )
-                        Text(text = " ▾", fontSize = 12.sp, color = colors.textSecondary)
-                    }
-
-                    // 排序方式
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.surface)
-                            .clickable {
-                                val all = GradeSortOrder.values()
-                                val nextIndex = (all.indexOf(sortOrder) + 1) % all.size
-                                sortOrder = all[nextIndex]
-                            }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = "${sortOrder.label} ▾",
-                            fontSize = 13.sp,
-                            color = colors.brand
-                        )
-                    }
+                    CampusFilterChip(
+                        text = if (activeTermId.isBlank()) "暂无可选学期" else activeTermId,
+                        onClick = { showTermPicker = true }
+                    )
+                    CampusFilterChip(
+                        text = sortOrder.label,
+                        active = true,
+                        onClick = {
+                            val all = GradeSortOrder.entries
+                            val nextIndex = (all.indexOf(sortOrder) + 1) % all.size
+                            sortOrder = all[nextIndex]
+                        }
+                    )
                 }
             }
 
@@ -232,16 +238,16 @@ fun GradesScreen(
                     useLabelAsPlaceholder = true,
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Search,
+                            imageVector = MiuixIcons.Regular.Search,
                             contentDescription = "搜索",
-                            tint = colors.textSecondary
+                            tint = colors.textTertiary
                         )
                     },
                     trailingIcon = {
                         if (searchQuery.isNotBlank()) {
                             IconButton(onClick = { searchQuery = "" }) {
                                 Icon(
-                                    imageVector = Icons.Default.Clear,
+                                    imageVector = MiuixIcons.Regular.Close,
                                     contentDescription = "清除",
                                     tint = colors.textSecondary
                                 )
@@ -253,20 +259,22 @@ fun GradesScreen(
             }
 
             // 4. 加载与异常状态
-            if (gradesSnapshot != null && (gradesSnapshot.phase == QueryPhase.LOADING || gradesSnapshot.phase == QueryPhase.FAILED)) {
+            if (gradesSnapshot != null &&
+                (gradesSnapshot.phase == QueryPhase.LOADING || gradesSnapshot.phase == QueryPhase.FAILED)
+            ) {
                 item {
-                    LoadStatePanel(
-                        isLoading = gradesSnapshot.phase == QueryPhase.LOADING && gradesSnapshot.data == null,
-                        error = gradesSnapshot.error,
-                        onRetry = {
-                            coroutineScope.launch { academic.refreshGrades(activeTermId) }
-                        },
-                        onLogin = onLoginClick
-                    )
+                    CampusCard {
+                        LoadStatePanel(
+                            isLoading = gradesSnapshot.phase == QueryPhase.LOADING && gradesSnapshot.data == null,
+                            error = gradesSnapshot.error,
+                            onRetry = { coroutineScope.launch { academic.refreshGrades(activeTermId) } },
+                            onLogin = onLoginClick
+                        )
+                    }
                 }
             }
 
-            // 5. 成绩列表分组
+            // 5. 成绩列表标题
             item {
                 Row(
                     modifier = Modifier
@@ -294,7 +302,7 @@ fun GradesScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(40.dp),
+                            .padding(CampusSpacing.xxl),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -311,66 +319,48 @@ fun GradesScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        AppNavigator.navigateTo(AppDestination.GradeDetail(activeTermId, g.sourceId))
-                                    }
-                                    .padding(vertical = 12.dp),
+                                    .tapScale(
+                                        onClick = {
+                                            AppNavigator.navigateTo(
+                                                AppDestination.GradeDetail(activeTermId, g.sourceId)
+                                            )
+                                        },
+                                        pressedScale = 0.985f
+                                    )
+                                    .padding(vertical = CampusSpacing.sm),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 左侧：课程名与学分/性质
+                                // 左侧：课程名与学分/性质标签
                                 Column(
                                     modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
                                         text = g.courseName,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = colors.textPrimary
+                                        color = colors.textPrimary,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         if (!g.credit.isNullOrBlank()) {
-                                            Text(
-                                                text = "${g.credit} 学分",
-                                                fontSize = 12.sp,
-                                                color = colors.textSecondary
-                                            )
+                                            CampusPill(text = "${g.credit} 学分")
                                         }
-                                        val retake = g.retakeDescription ?: "初修"
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.surfaceMuted)
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = retake,
-                                                fontSize = 10.sp,
-                                                color = colors.textSecondary
-                                            )
-                                        }
+                                        CampusPill(text = g.retakeDescription ?: "初修")
                                         if (!g.passDescription.isNullOrBlank()) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(colors.surfaceMuted)
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = g.passDescription.orEmpty(),
-                                                    fontSize = 10.sp,
-                                                    color = colors.textSecondary
-                                                )
-                                            }
+                                            CampusPill(text = g.passDescription.orEmpty())
                                         }
                                     }
                                 }
 
-                                // 右侧：原始成绩 24sp，官方绩点 13sp
+                                Spacer(modifier = Modifier.width(CampusSpacing.sm))
+
+                                // 右侧：原始成绩与官方绩点
                                 Column(
                                     horizontalAlignment = Alignment.End,
                                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -379,11 +369,14 @@ fun GradesScreen(
                                         text = g.rawScore ?: "—",
                                         fontSize = 24.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = colors.textPrimary
+                                        color = if (g.rawScore != null) colors.gradeForeground else colors.textTertiary
                                     )
-                                    val gpText = if (!g.officialGradePoint.isNullOrBlank()) "绩点 ${g.officialGradePoint}" else "官方绩点待公布"
                                     Text(
-                                        text = gpText,
+                                        text = if (!g.officialGradePoint.isNullOrBlank()) {
+                                            "绩点 ${g.officialGradePoint}"
+                                        } else {
+                                            "官方绩点待公布"
+                                        },
                                         fontSize = 12.sp,
                                         color = colors.textSecondary
                                     )
@@ -395,10 +388,6 @@ fun GradesScreen(
                         }
                     }
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -414,30 +403,20 @@ fun GradesScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .heightIn(max = 420.dp)
+                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
-                items(availableTerms) { termId ->
+                itemsIndexed(availableTerms) { index, termId ->
                     val isSelected = termId == activeTermId
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) colors.brandContainer else colors.surface)
-                            .clickable {
+                    StaggeredAppear(index = index, key = availableTerms.size) {
+                        CampusSelectionRow(
+                            title = termId,
+                            selected = isSelected,
+                            onClick = {
                                 selectedTermId = termId
                                 showTermPicker = false
                             }
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = termId,
-                            fontSize = 15.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) colors.brand else colors.textPrimary
                         )
                     }
                 }

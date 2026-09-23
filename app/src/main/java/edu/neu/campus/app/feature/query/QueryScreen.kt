@@ -420,14 +420,17 @@ private fun HighlightEntryCard(
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 128.dp)
-            .clip(RoundedCornerShape(CampusShapes.extraLarge))
+            .tapScale(
+                onClick = onClick,
+                pressedScale = 0.97f,
+                clipShape = RoundedCornerShape(CampusShapes.extraLarge)
+            )
             .background(
                 Brush.linearGradient(
                     listOf(container, container.copy(alpha = if (colors.isDark) 0.6f else 0.72f))
                 )
             )
             .border(1.dp, accent.copy(alpha = 0.16f), RoundedCornerShape(CampusShapes.extraLarge))
-            .tapScale(onClick = onClick, pressedScale = 0.97f)
             .padding(CampusSpacing.md)
     ) {
         Column(
@@ -481,8 +484,7 @@ private fun ToolPanelItem(
     Column(
         modifier = modifier
             .defaultMinSize(minHeight = 88.dp)
-            .clip(RoundedCornerShape(CampusShapes.small))
-            .tapScale(onClick = onClick, pressedScale = 0.94f)
+            .tapScale(onClick = onClick, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.small))
             .padding(vertical = CampusSpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)

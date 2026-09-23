@@ -7,29 +7,33 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
-import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.SafeDataTag
-import edu.neu.campus.ui.theme.LocalCampusColors
+import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.components.tapScale
+import edu.neu.campus.ui.theme.CampusSpacing
+import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.WorldClock
 
 data class CampusServiceItem(
     val id: String,
@@ -45,7 +49,7 @@ fun ServicesCatalogScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val campusColors = LocalCampusColors.current
+    val campusColors = CampusTheme.colors
     var selectedService by remember { mutableStateOf<CampusServiceItem?>(null) }
 
     val serviceList = remember {
@@ -62,73 +66,80 @@ fun ServicesCatalogScreen(
     ) {
         CampusTopBar(
             title = "学校服务目录",
+            subtitle = "学校官方入口（浏览器打开）",
             onBack = onBack
         )
 
-        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Row(modifier = Modifier.padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs)) {
             SafeDataTag(text = "学校服务将在系统浏览器中打开")
         }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(CampusSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
         ) {
-            items(serviceList, key = { it.id }) { item ->
-                Card(
-                    insideMargin = PaddingValues(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedService = item }
+            itemsIndexed(serviceList, key = { _, item -> item.id }) { index, item ->
+                StaggeredAppear(
+                    index = index,
+                    key = serviceList.size,
+                    modifier = Modifier.animateItem()
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = item.name,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = campusColors.textPrimary
-                                )
+                    val badgeIcon = if (item.id == "portal") MiuixIcons.Regular.WorldClock else MiuixIcons.Regular.Notes
+                    val badgeTint = if (item.id == "portal") campusColors.timetableForeground else campusColors.gradeForeground
+                    val badgeContainer = if (item.id == "portal") campusColors.timetableContainer else campusColors.gradeContainer
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(campusColors.surfaceMuted)
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
+                    CampusCard(onClick = { selectedService = item }) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                        ) {
+                            CampusIconBadge(
+                                icon = badgeIcon,
+                                tint = badgeTint,
+                                container = badgeContainer,
+                                size = 40.dp,
+                                iconSize = 20.dp
+                            )
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
+                                ) {
                                     Text(
+                                        text = item.name,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = campusColors.textPrimary
+                                    )
+
+                                    CampusPill(
                                         text = item.category,
-                                        fontSize = 11.sp,
-                                        color = campusColors.textSecondary
+                                        contentColor = campusColors.brand,
+                                        containerColor = campusColors.brandContainer
                                     )
                                 }
+
+                                Text(
+                                    text = item.description,
+                                    fontSize = 12.sp,
+                                    color = campusColors.textSecondary,
+                                    maxLines = 1
+                                )
                             }
 
                             Text(
-                                text = item.description,
-                                fontSize = 12.sp,
-                                color = campusColors.textSecondary,
-                                maxLines = 1
+                                text = "查看 ›",
+                                fontSize = 13.sp,
+                                color = campusColors.brand,
+                                modifier = Modifier.padding(start = CampusSpacing.xxs)
                             )
                         }
-
-                        Text(
-                            text = "查看 ›",
-                            fontSize = 13.sp,
-                            color = campusColors.brand,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
                     }
                 }
             }
@@ -141,17 +152,14 @@ fun ServicesCatalogScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.5f))
-                .clickable { selectedService = null }
-                .padding(24.dp),
+                .tapScale(onClick = { selectedService = null })
+                .padding(CampusSpacing.xl),
             contentAlignment = Alignment.Center
         ) {
-            Card(
-                insideMargin = PaddingValues(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = false) {}
+            CampusCard(
+                contentPadding = PaddingValues(CampusSpacing.lg)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -164,19 +172,11 @@ fun ServicesCatalogScreen(
                             color = campusColors.textPrimary
                         )
 
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(campusColors.brandContainer)
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = service.category,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = campusColors.brand
-                            )
-                        }
+                        CampusPill(
+                            text = service.category,
+                            contentColor = campusColors.brand,
+                            containerColor = campusColors.brandContainer
+                        )
                     }
 
                     Text(
@@ -197,7 +197,7 @@ fun ServicesCatalogScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                     ) {
                         Button(
                             onClick = {

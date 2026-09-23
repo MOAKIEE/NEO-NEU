@@ -40,14 +40,13 @@ fun CampusFilterChip(
     val colors = CampusTheme.colors
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(CampusShapes.pill))
+            .tapScale(onClick = onClick, pressedScale = 0.95f, clipShape = RoundedCornerShape(CampusShapes.pill))
             .background(if (active) colors.brandContainer else colors.surface)
             .border(
                 width = 1.dp,
                 color = if (active) colors.brandBorder else colors.outlineVariant,
                 shape = RoundedCornerShape(CampusShapes.pill)
             )
-            .tapScale(onClick = onClick, pressedScale = 0.95f)
             .padding(horizontal = CampusSpacing.sm + 2.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -93,14 +92,13 @@ fun CampusSelectionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(CampusShapes.medium))
+            .tapScale(onClick = onClick, pressedScale = 0.98f, clipShape = RoundedCornerShape(CampusShapes.medium))
             .background(if (selected) colors.brandContainer else colors.surface)
             .border(
                 width = 1.dp,
                 color = if (selected) colors.brandBorder else colors.outlineVariant,
                 shape = RoundedCornerShape(CampusShapes.medium)
             )
-            .tapScale(onClick = onClick, pressedScale = 0.98f)
             .padding(CampusSpacing.sm + 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

@@ -516,10 +516,9 @@ private fun TodayHeader(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(CircleShape)
+                .tapScale(onClick = onMessagesClick, pressedScale = 0.92f, clipShape = CircleShape)
                 .background(colors.surface)
-                .border(1.dp, colors.outlineVariant, CircleShape)
-                .tapScale(onClick = onMessagesClick, pressedScale = 0.92f),
+                .border(1.dp, colors.outlineVariant, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -693,8 +692,7 @@ private fun QuickActionItem(
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(CampusShapes.small))
-            .tapScale(onClick = onClick, pressedScale = 0.94f)
+            .tapScale(onClick = onClick, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.small))
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
@@ -752,13 +750,12 @@ private fun BalanceSummaryCard(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(CampusShapes.large))
+            .tapScale(onClick = onClick, pressedScale = 0.97f, clipShape = RoundedCornerShape(CampusShapes.large))
             .background(
                 Brush.linearGradient(
                     listOf(container, container.copy(alpha = if (colors.isDark) 0.55f else 0.7f))
                 )
             )
-            .tapScale(onClick = onClick, pressedScale = 0.97f)
             .padding(CampusSpacing.md)
     ) {
         Column(
