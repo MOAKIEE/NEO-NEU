@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Alarm
@@ -88,12 +90,15 @@ fun ExamsScreen(
     val arrangedExams = remember(rawExams) { rawExams.filter { it.arranged } }
     val unarrangedExams = remember(rawExams) { rawExams.filter { !it.arranged } }
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "考试安排",
             onBack = onBack,
             subtitle = "已安排与未安排考试"

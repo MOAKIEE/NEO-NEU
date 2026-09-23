@@ -87,6 +87,15 @@ fun HeroCourseCard(
 
     val isLive = state == HeroState.Schedule && focus.label == "正在上课" && focus.courses.isNotEmpty()
 
+    // 状态标签不能沿用课程焦点文案：同步失败时课程焦点为空，会误报「今天的课程已结束」。
+    val statusLabel = when (state) {
+        HeroState.Error -> "课程同步失败"
+        HeroState.Loading -> "正在同步"
+        HeroState.TermPending -> "教学周待确认"
+        HeroState.NoData -> "尚未同步"
+        HeroState.Schedule -> focus.label
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -116,7 +125,7 @@ fun HeroCourseCard(
                         PulsingDot(color = Color(0xFF7BE0A8))
                     }
                     Text(
-                        text = focus.label,
+                        text = statusLabel,
                         color = colors.onHero,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium

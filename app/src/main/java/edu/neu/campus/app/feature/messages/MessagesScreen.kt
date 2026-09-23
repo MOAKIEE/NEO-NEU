@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,6 +35,7 @@ import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -88,12 +90,15 @@ fun MessagesScreen(
         }
     }
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "消息中心",
             onBack = onBack,
             subtitle = "门户消息与本机已读状态",

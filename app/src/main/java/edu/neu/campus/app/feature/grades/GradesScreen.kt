@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -28,6 +29,7 @@ import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
@@ -102,12 +104,15 @@ fun GradesScreen(
         list
     }
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "成绩查询",
             subtitle = activeTermId.ifBlank { "官方原始成绩与绩点" },
             onBack = onBack
@@ -154,14 +159,26 @@ fun GradesScreen(
                                 color = colors.gradeForeground
                             )
                             val gpaVal = gradeSummarySnapshot.data?.officialGpa
-                            AnimatedNumber(
-                                target = gpaVal?.toFloatOrNull(),
-                                fallback = gpaVal ?: "—.—",
-                                decimals = 2,
-                                fontSize = 36.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.gradeForeground
-                            )
+                            val gpaNumber = gpaVal?.toFloatOrNull()
+                            if (gpaNumber != null) {
+                                AnimatedNumber(
+                                    target = gpaNumber,
+                                    decimals = 2,
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.gradeForeground
+                                )
+                            } else {
+                                // 大号占位符会被误读成图形，这里改用明确文案；
+                                // 学校返回非数值绩点时按原样展示。
+                                Text(
+                                    text = gpaVal ?: "暂无数据",
+                                    fontSize = if (gpaVal != null) 24.sp else 17.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.gradeForeground.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
                             val scopeText = gradeSummarySnapshot.data?.scope ?: "学校返回统计值"
                             Text(
                                 text = "$scopeText · 最近同步 ${TimeFormatter.formatTime(gradeSummarySnapshot.lastSuccessEpochMillis)}",

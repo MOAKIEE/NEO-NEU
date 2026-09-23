@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -53,6 +54,7 @@ import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
@@ -95,12 +97,15 @@ fun QueryScreen(
     val compact = LocalConfiguration.current.screenWidthDp < 360 || fontScale >= 1.3f
     val toolColumns = if (fontScale >= 1.5f) 1 else if (compact) 2 else 3
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "查询",
             subtitle = "校园信息与常用入口"
         )

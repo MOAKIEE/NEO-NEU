@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +30,7 @@ import edu.neu.campus.ui.components.StaggeredAppear
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 
 /**
@@ -51,12 +53,15 @@ fun ExamDetailScreen(
     val exam = examsSnapshot.data?.firstOrNull { it == selectedExam }
     val courseName = selectedExam.courseName
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "考试详情",
             subtitle = if (exam?.arranged == true) "已安排考试" else "未安排考试",
             onBack = onBack

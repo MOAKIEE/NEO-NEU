@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +53,7 @@ import edu.neu.campus.ui.timetable.dayOfWeekText
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -143,13 +145,16 @@ fun TimetableScreen(
     val showGrid = !isListView && LocalDensity.current.fontScale < 1.3f &&
         !(selectedCampusId == null && campuses.size > 1)
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         // 1. 顶部标题栏
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "课表",
             subtitle = currentTerm?.name.orEmpty(),
             actions = {
@@ -260,15 +265,33 @@ fun TimetableScreen(
                 label = "timetableMode"
             ) { gridMode ->
                 if (gridMode) {
-                    TimetableGrid(
-                        courses = filteredCourses,
-                        currentWeek = currentWeekObj,
-                        sections = rawTable?.sectionsByCampus?.let {
-                            if (selectedCampusId != null) it[selectedCampusId].orEmpty() else it.values.flatten()
-                        }.orEmpty(),
-                        onCourseClick = { inspectingCourse = it },
-                        onConflictClick = { conflictCourses = it }
-                    )
+                    // 网格本身是白色表体，收进圆角卡片里，避免与页面底色形成生硬色带。
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(
+                                start = CampusSpacing.screenHorizontal,
+                                end = CampusSpacing.screenHorizontal,
+                                bottom = CampusSpacing.xs
+                            )
+                            .clip(RoundedCornerShape(CampusShapes.extraLarge))
+                            .background(colors.surface)
+                            .border(
+                                width = 1.dp,
+                                color = colors.outlineVariant,
+                                shape = RoundedCornerShape(CampusShapes.extraLarge)
+                            )
+                    ) {
+                        TimetableGrid(
+                            courses = filteredCourses,
+                            currentWeek = currentWeekObj,
+                            sections = rawTable?.sectionsByCampus?.let {
+                                if (selectedCampusId != null) it[selectedCampusId].orEmpty() else it.values.flatten()
+                            }.orEmpty(),
+                            onCourseClick = { inspectingCourse = it },
+                            onConflictClick = { conflictCourses = it }
+                        )
+                    }
                 } else {
                     TimetableDayList(
                         courses = filteredCourses,
@@ -281,11 +304,17 @@ fun TimetableScreen(
             }
         }
 
-        // 5. 底部来源与未排课提示
+        // 5. 底部来源与未排课提示（与页面同底色，仅用分隔线区隔，避免多出一条白色色带）
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(colors.divider)
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(colors.surface)
+                .background(colors.background)
                 .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically

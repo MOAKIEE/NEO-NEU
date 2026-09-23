@@ -138,11 +138,14 @@ fun AnimatedNumber(
         else -> prefix + String.format(Locale.US, "%.${decimals}f", animatable.value) + suffix
     }
 
+    // 无数据时降低字重与不透明度，让占位符明确读作「暂无数据」而不是一个数值。
+    val isPlaceholder = target == null
+
     Text(
         text = text,
         modifier = modifier,
         fontSize = fontSize,
-        fontWeight = fontWeight,
-        color = color
+        fontWeight = if (isPlaceholder) FontWeight.Medium else fontWeight,
+        color = if (isPlaceholder) color.copy(alpha = 0.62f) else color
     )
 }

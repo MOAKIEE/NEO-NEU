@@ -65,10 +65,11 @@ fun MainScreen(
     val stateHolder = rememberSaveableStateHolder()
 
     Scaffold(
+        // 系统栏内边距由 Miuix Scaffold 的 contentWindowInsets 与 TopAppBar/NavigationBar
+        // 自身的 defaultWindowInsetsPadding 处理；这里再叠加一次会造成顶部重复留白。
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
-            .statusBarsPadding(),
+            .background(colors.background),
         containerColor = colors.background,
         bottomBar = {
             if (destination == AppDestination.Main) {
@@ -154,7 +155,8 @@ fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .navigationBarsPadding()
+                                // 底部安全区已由 Miuix Scaffold 的 contentWindowInsets 计入
+                                // paddingValues，这里只补键盘避让，避免重复留白。
                                 .imePadding()
                         ) {
                             subScreen(dest)

@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +41,7 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -73,12 +75,15 @@ fun TasksScreen(
     val tasksSnapshot by CampusDataProvider.portal.tasks(kind = activeTab, page = 1, pageSize = 20).collectAsState()
     val isRefreshing = tasksSnapshot.phase == QueryPhase.LOADING
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(campusColors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "待办与申请",
             subtitle = "待办与申请状态（只读）",
             onBack = onBack,

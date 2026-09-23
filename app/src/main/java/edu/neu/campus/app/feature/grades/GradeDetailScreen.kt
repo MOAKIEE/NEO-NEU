@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +33,7 @@ import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 
 /**
@@ -66,12 +68,15 @@ fun GradeDetailScreen(
         }
     }
 
+    val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
         CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
             title = "成绩详情",
             subtitle = "官方成绩与分项构成",
             onBack = onBack
@@ -154,15 +159,24 @@ fun GradeDetailScreen(
                                         color = colors.textSecondary
                                     )
                                     val scoreText = gradeItem?.rawScore ?: detailSnapshot?.data?.rawScore
-                                    val scoreDecimals = if (scoreText?.contains('.') == true) 1 else 0
-                                    AnimatedNumber(
-                                        target = scoreText?.toFloatOrNull(),
-                                        fallback = scoreText ?: "—",
-                                        decimals = scoreDecimals,
-                                        fontSize = 36.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.gradeForeground
-                                    )
+                                    val scoreNumber = scoreText?.toFloatOrNull()
+                                    if (scoreNumber != null) {
+                                        AnimatedNumber(
+                                            target = scoreNumber,
+                                            decimals = if (scoreText?.contains('.') == true) 1 else 0,
+                                            fontSize = 36.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.gradeForeground
+                                        )
+                                    } else {
+                                        Text(
+                                            text = scoreText ?: "暂无数据",
+                                            fontSize = if (scoreText != null) 26.sp else 17.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = colors.gradeForeground.copy(alpha = 0.7f),
+                                            modifier = Modifier.padding(top = 8.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -18,6 +19,7 @@ import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -40,8 +42,19 @@ fun ScheduleScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     LaunchedEffect(term?.id) {
         term?.let { repo.refreshWeeks(it.id); repo.refreshTimetable(it.id, null) }
     }
-    Column(modifier.fillMaxSize().background(colors.background)) {
-        CampusTopBar(title = "作息与校历", subtitle = "校区节次与校历", onBack = onBack)
+    val pageScrollBehavior = MiuixScrollBehavior()
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(colors.background)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
+    ) {
+        CampusTopBar(
+            scrollBehavior = pageScrollBehavior,
+            title = "作息与校历",
+            subtitle = "校区节次与校历",
+            onBack = onBack
+        )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(CampusSpacing.screenHorizontal),
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
             StaggeredAppear(index = 0) {
