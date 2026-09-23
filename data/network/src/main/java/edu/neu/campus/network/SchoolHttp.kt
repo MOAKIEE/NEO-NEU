@@ -24,6 +24,7 @@ enum class SchoolCall(val domain: Domain, val method: String, val path: String, 
     TIMETABLE(Domain.ACADEMIC, "POST", "/sys/kbapp/api/wdkbcx/getMyScheduleDetail.do", setOf("XNXQDM", "XQDM", "ZC")),
     GRADE_TERMS(Domain.ACADEMIC, "POST", "/sys/cjzhcxapp/modules/wdcj/cxwdcjxnxq.do", emptySet()),
     GRADES(Domain.ACADEMIC, "POST", "/sys/cjzhcxapp/modules/wdcj/cxwdcj.do", setOf("querySetting")),
+    GRADE_DETAIL(Domain.ACADEMIC, "POST", "/sys/cjzhcxapp/api/wdcj/details.do", setOf("WID")),
     GRADE_SUMMARY(Domain.ACADEMIC, "POST", "/sys/cjzhcxapp/api/wdcj/queryPjxfjd.do", emptySet()),
     EXAMS(Domain.ACADEMIC, "POST", "/sys/wdkwapp/api/wdks/queryMyExamArrangeMent.do", setOf("XNXQDM")),
     PORTAL_INFO(Domain.PORTAL, "GET", "/personal/frontend/data/info", emptySet()),
@@ -46,37 +47,43 @@ class SchoolHttp(private val session: LocalSession, client: OkHttpClient? = null
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build())
 
-    suspend fun execute(call: SchoolCall, parameters: Map<String, String> = emptyMap()): String = withContext(Dispatchers.IO) {
+    suspend fun execute(call: SchoolCall, parameters: Map<String, String> = emptyMap(), includeCookies: Boolean = true): String = withContext(Dispatchers.IO) {
         require(parameters.keys.all { it in call.keys }) { "Unsupported query parameter" }
         val base = (call.baseUrl + call.path).toHttpUrl()
         val url = if (call.method == "GET") {
             base.newBuilder().apply { parameters.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
         } else base
         val builder = Request.Builder().url(url).header("Accept", "application/json, text/javascript, */*; q=0.01")
-        session.cookieHeader(url.toString())?.let { builder.header("Cookie", it) }
+        if (includeCookies) session.cookieHeader(url.toString())?.let { builder.header("Cookie", it) }
         val request = if (call.method == "POST") {
             val body = FormBody.Builder().apply { parameters.forEach { (k, v) -> add(k, v) } }.build()
             builder.post(body).build()
         } else builder.get().build()
         try {
             client.newCall(request).execute().use { response ->
-                response.headers("Set-Cookie").forEach { session.acceptSetCookie(url.toString(), it) }
+                if (includeCookies) response.headers("Set-Cookie").forEach { session.acceptSetCookie(url.toString(), it) }
                 val code = response.code
                 if (code == 401 || code in 300..399) throw SchoolHttpException(QueryError(QueryErrorKind.AUTH_REQUIRED, "学校登录状态需要恢复", true))
                 if (code == 403) throw SchoolHttpException(QueryError(QueryErrorKind.FORBIDDEN, "学校账户暂无此查询权限", false))
                 if (code !in 200..299) throw SchoolHttpException(QueryError(QueryErrorKind.SERVER, "学校服务暂时不可用", true))
                 val contentType = response.header("Content-Type").orEmpty().lowercase()
                 val body = response.body?.string()?.trim().orEmpty()
-                if (body.startsWith("<") || "text/html" in contentType) {
-                    throw SchoolHttpException(QueryError(QueryErrorKind.AUTH_REQUIRED, "学校返回了登录页面，需要重新认证", true))
-                }
-                if (!body.startsWith("{") && !body.startsWith("[")) {
-                    throw SchoolHttpException(QueryError(QueryErrorKind.SCHEMA_CHANGED, "学校响应格式已变化", false))
-                }
+                SchoolBodyClassifier.validate(contentType, body)
                 body
             }
         } catch (e: IOException) {
             throw SchoolHttpException(QueryError(QueryErrorKind.NETWORK, "网络连接失败，请稍后重试", true))
+        }
+    }
+}
+
+object SchoolBodyClassifier {
+    fun validate(contentType: String, body: String) {
+        if (body.startsWith("<") || "text/html" in contentType.lowercase()) {
+            throw SchoolHttpException(QueryError(QueryErrorKind.AUTH_REQUIRED, "学校返回了登录页面，需要重新认证", true))
+        }
+        if (!body.startsWith("{") && !body.startsWith("[")) {
+            throw SchoolHttpException(QueryError(QueryErrorKind.SCHEMA_CHANGED, "学校响应格式已变化", false))
         }
     }
 }

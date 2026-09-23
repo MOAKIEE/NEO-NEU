@@ -4,7 +4,6 @@ import android.content.Context
 import android.webkit.CookieManager
 import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.DomainStatus
-import edu.neu.campus.contract.SessionRepository
 import edu.neu.campus.contract.SessionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +12,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** The scope is a random local partition, never a username or a school token. */
-class LocalSession(context: Context) : SessionRepository {
+class LocalSession(context: Context) {
     companion object {
         @Volatile private var instance: LocalSession? = null
         fun get(context: Context): LocalSession = instance ?: synchronized(this) {
@@ -25,10 +24,10 @@ class LocalSession(context: Context) : SessionRepository {
     private val savedScope = preferences.getString("scope", null)
     private val mutableState = MutableStateFlow(
         SessionState(savedScope,
-            if (savedScope == null) DomainStatus.SIGNED_OUT else DomainStatus.EXPIRED,
-            if (savedScope == null) DomainStatus.SIGNED_OUT else DomainStatus.EXPIRED)
+            if (savedScope == null) DomainStatus.SIGNED_OUT else DomainStatus.UNVERIFIED,
+            if (savedScope == null) DomainStatus.SIGNED_OUT else DomainStatus.UNVERIFIED)
     )
-    override val state: StateFlow<SessionState> = mutableState
+    val state: StateFlow<SessionState> = mutableState
     private val scopeListeners = mutableListOf<(String?) -> Unit>()
     @Synchronized fun addScopeListener(listener: (String?) -> Unit) { scopeListeners += listener }
 
@@ -53,7 +52,7 @@ class LocalSession(context: Context) : SessionRepository {
         cookies.flush()
     }
 
-    override suspend fun signOut() {
+    suspend fun signOut() {
         suspendCancellableCoroutine<Unit> { continuation ->
             cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
         }

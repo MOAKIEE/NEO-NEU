@@ -1,17 +1,25 @@
 package edu.neu.campus.repository
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import edu.neu.campus.academic.AcademicApi
 import edu.neu.campus.contract.*
 import edu.neu.campus.database.QueryCache
 import edu.neu.campus.network.SchoolCall
 import edu.neu.campus.network.SchoolHttp
 import edu.neu.campus.network.SchoolHttpException
+import edu.neu.campus.network.SessionProbe
 import edu.neu.campus.portal.PortalApi
 import edu.neu.campus.portal.PortalAuthException
 import edu.neu.campus.session.LocalSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -21,25 +29,37 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Application-scoped entry point. Keep one instance for the process. */
 class CampusData private constructor(context: Context) {
+    private val appContext = context.applicationContext
     val localSession = LocalSession.get(context)
     private val cache = QueryCache(context)
     private val http = SchoolHttp(localSession)
     private val academicApi = AcademicApi(http)
     private val portalApi = PortalApi(http)
     private val slots = ConcurrentHashMap<String, Slot<*>>()
+    private val worker = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableShapes = MutableStateFlow<Map<String, String>>(emptyMap())
     /** Debug host may inspect field names and types only; response values never leave the adapter. */
     val responseShapes: StateFlow<Map<String, String>> = mutableShapes
+    private fun recordShape(key: String, raw: String) {
+        mutableShapes.value = mutableShapes.value + (key to ResponseShape.describe(raw))
+    }
     val session: SessionRepository = object : SessionRepository {
         override val state: StateFlow<SessionState> = localSession.state
+        override suspend fun verify() { SessionProbe.verify(localSession, http) }
         override suspend fun signOut() {
             val oldScope = state.value.accountScope
             localSession.signOut()
-            if (oldScope != null) cache.clearScope(oldScope)
+            if (oldScope != null) withContext(Dispatchers.IO) { cache.clearScope(oldScope) }
         }
     }
     val academic: AcademicRepository = AcademicImpl()
     val portal: PortalRepository = PortalImpl()
+
+    /** Debug-host-only expiry probe: omits cookies on one whitelisted read, preserves real CookieManager. */
+    suspend fun verificationOnlyAuthFailureProbe(termId: String) {
+        check(appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
+        (academic as AcademicImpl).authFailureProbe(termId)
+    }
 
     init { localSession.addScopeListener {
         slots.values.forEach { it.invalidate() }; slots.clear(); mutableShapes.value = emptyMap()
@@ -55,6 +75,7 @@ class CampusData private constructor(context: Context) {
     private class Slot<T>(initial: QuerySnapshot<T>) {
         val state = MutableStateFlow(initial)
         val lock = Mutex()
+        val loaded = CompletableDeferred<Unit>()
         fun invalidate() { state.value = QuerySnapshot() }
     }
 
@@ -63,32 +84,42 @@ class CampusData private constructor(context: Context) {
         val scope = localSession.state.value.accountScope
         val fullKey = "$scope|$key"
         return slots.getOrPut(fullKey) {
-            val cached = if (scope == null) null else cache.read(scope, key)
-            val value = cached?.let { runCatching { parse(it.payload) }.getOrNull() }
-            Slot(QuerySnapshot(value, if (value == null) QueryPhase.IDLE else QueryPhase.READY,
-                if (value == null) null else cached?.savedAtEpochMillis, value != null))
+            Slot<T>(QuerySnapshot()).also { holder ->
+                if (scope == null) holder.loaded.complete(Unit) else worker.launch {
+                    try {
+                        val cached = cache.read(scope, key)
+                        val value = cached?.let { runCatching { parse(it.payload) }.getOrNull() }
+                        if (value != null && localSession.state.value.accountScope == scope && holder.state.value.phase == QueryPhase.IDLE) {
+                            holder.state.value = QuerySnapshot(value, QueryPhase.READY, cached.savedAtEpochMillis, true)
+                        }
+                    } finally {
+                        holder.loaded.complete(Unit)
+                    }
+                }
+            }
         } as Slot<T>
     }
 
     private suspend fun <T> refresh(key: String, domain: Domain, parse: (String) -> T, fetch: suspend () -> String) {
         val scope = localSession.state.value.accountScope
         val holder = slot(key, parse)
+        holder.loaded.await()
         holder.lock.withLock {
             val before = holder.state.value
             if (scope == null) {
-                holder.state.value = before.copy(phase = QueryPhase.FAILED, isStale = before.data != null,
-                    error = QueryError(QueryErrorKind.AUTH_REQUIRED, "请先登录学校账号", true))
+                holder.state.value = SnapshotTransitions.failed(before,
+                    QueryError(QueryErrorKind.AUTH_REQUIRED, "请先登录学校账号", true))
                 return
             }
-            holder.state.value = before.copy(phase = QueryPhase.LOADING, isStale = before.data != null, error = null)
+            holder.state.value = SnapshotTransitions.loading(before)
             try {
                 val raw = fetch()
-                mutableShapes.value = mutableShapes.value + (key to ResponseShape.describe(raw))
-                val parsed = parse(raw)
+                recordShape(key, raw)
+                val parsed = withContext(Dispatchers.Default) { parse(raw) }
                 if (localSession.state.value.accountScope != scope) return
                 val now = System.currentTimeMillis()
-                cache.save(scope, key, raw, now)
-                holder.state.value = QuerySnapshot(parsed, QueryPhase.READY, now, false, null)
+                withContext(Dispatchers.IO) { cache.save(scope, key, raw, now) }
+                holder.state.value = SnapshotTransitions.succeeded(parsed, now)
                 localSession.mark(domain, DomainStatus.READY)
             } catch (error: Exception) {
                 if (localSession.state.value.accountScope != scope) return
@@ -97,10 +128,11 @@ class CampusData private constructor(context: Context) {
                     is PortalAuthException -> QueryError(QueryErrorKind.AUTH_REQUIRED, "门户登录状态需要恢复", true)
                     is JSONException, is edu.neu.campus.academic.SchemaException,
                     is edu.neu.campus.portal.PortalSchemaException -> QueryError(QueryErrorKind.SCHEMA_CHANGED, "学校返回字段尚未核验或发生变化", false)
+                    is IllegalArgumentException -> QueryError(QueryErrorKind.UNSUPPORTED, "查询对象不在当前账号已取得的列表中", false)
                     else -> QueryError(QueryErrorKind.UNKNOWN, "查询失败，请稍后重试", true)
                 }
                 if (safe.kind == QueryErrorKind.AUTH_REQUIRED) localSession.mark(domain, DomainStatus.EXPIRED)
-                holder.state.value = before.copy(phase = QueryPhase.FAILED, isStale = before.data != null, error = safe)
+                holder.state.value = SnapshotTransitions.failed(before, safe)
             }
         }
     }
@@ -150,16 +182,33 @@ class CampusData private constructor(context: Context) {
             for (campus in campuses) {
                 val params = mutableMapOf("XNXQDM" to termId, "XQDM" to campus.id)
                 if (week != null) params["ZC"] = week.toString()
+                val sectionBody = academicApi.raw(SchoolCall.SECTIONS, params)
+                val scheduleBody = academicApi.raw(SchoolCall.TIMETABLE, params)
+                recordShape("sections", sectionBody)
+                recordShape("schedule", scheduleBody)
                 parts.put(JSONObject().put("id", campus.id).put("name", campus.name)
-                    .put("sections", academicApi.raw(SchoolCall.SECTIONS, params))
-                    .put("schedule", academicApi.raw(SchoolCall.TIMETABLE, params)))
+                    .put("sections", sectionBody)
+                    .put("schedule", scheduleBody))
             }
             JSONObject().put("campuses", parts).toString()
+        }
+        suspend fun authFailureProbe(termId: String) = refresh("table:$termId:null", Domain.ACADEMIC,
+            { parseTimetable(termId, null, it) }) {
+            http.execute(SchoolCall.CAMPUSES, termParams(termId), includeCookies = false)
+        }
+        override fun gradeTermIds() = slot("grade-terms", academicApi::gradeTermIds).state
+        override suspend fun refreshGradeTermIds() = refresh("grade-terms", Domain.ACADEMIC, academicApi::gradeTermIds) {
+            academicApi.raw(SchoolCall.GRADE_TERMS)
         }
         override fun grades(termId: String) = slot("grades:$termId", academicApi::grades).state
         override suspend fun refreshGrades(termId: String) = refresh("grades:$termId", Domain.ACADEMIC, academicApi::grades) {
             val query = JSONArray().put(JSONObject().put("name", "XNXQDM").put("value", termId).put("builder", "m_value_equal").put("linkOpt", "AND"))
             academicApi.raw(SchoolCall.GRADES, mapOf("querySetting" to query.toString()))
+        }
+        override fun gradeDetail(termId: String, sourceId: String) = slot("grade-detail:$termId:$sourceId", { academicApi.gradeDetail(it, sourceId) }).state
+        override suspend fun refreshGradeDetail(termId: String, sourceId: String) = refresh("grade-detail:$termId:$sourceId", Domain.ACADEMIC, { academicApi.gradeDetail(it, sourceId) }) {
+            require(grades(termId).value.data?.any { it.sourceId == sourceId } == true)
+            academicApi.raw(SchoolCall.GRADE_DETAIL, mapOf("WID" to sourceId))
         }
         override fun gradeSummary() = slot("grade-summary", academicApi::gradeSummary).state
         override suspend fun refreshGradeSummary() = refresh("grade-summary", Domain.ACADEMIC, academicApi::gradeSummary) {
@@ -172,17 +221,18 @@ class CampusData private constructor(context: Context) {
     }
 
     private inner class PortalImpl : PortalRepository {
-        private fun parseBalances(raw: String): List<Balance> {
+        private fun parseBalance(raw: String, kind: BalanceKind): Balance {
             val root = JSONObject(raw)
-            val detailArray = root.getJSONArray("details")
-            return portalApi.balances(root.getString("items"), (0 until detailArray.length()).map { detailArray.getString(it) })
+            val ref = portalApi.balanceItem(root.getString("items"), kind)
+            return portalApi.balance(root.getString("detail"), kind, ref)
         }
-        override fun balances() = slot("balances", ::parseBalances).state
-        override suspend fun refreshBalances() = refresh("balances", Domain.PORTAL, ::parseBalances) {
+        override fun balance(kind: BalanceKind) = slot("balance:$kind", { parseBalance(it, kind) }).state
+        override suspend fun refreshBalance(kind: BalanceKind) = refresh("balance:$kind", Domain.PORTAL, { parseBalance(it, kind) }) {
             val items = portalApi.raw(SchoolCall.BALANCE_ITEMS, mapOf("type" to "personal_data"))
-            val details = JSONArray()
-            for (id in portalApi.balanceItemIds(items)) details.put(portalApi.raw(SchoolCall.BALANCE_DETAIL, mapOf("id" to id)))
-            JSONObject().put("items", items).put("details", details).toString()
+            mutableShapes.value = mutableShapes.value + ("balance-catalog" to portalApi.balanceCatalog(items).joinToString(" | "))
+            val ref = portalApi.balanceItem(items, kind)
+            val detail = portalApi.raw(SchoolCall.BALANCE_DETAIL, mapOf("id" to ref.id))
+            JSONObject().put("items", items).put("detail", detail).toString()
         }
         private fun messageKey(page: Int, size: Int, status: Int) = "messages:$page:$size:$status"
         override fun messages(page: Int, pageSize: Int, status: Int) = slot(messageKey(page, pageSize, status), portalApi::messages).state

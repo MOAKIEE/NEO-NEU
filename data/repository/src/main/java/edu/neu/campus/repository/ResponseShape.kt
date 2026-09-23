@@ -8,9 +8,9 @@ internal object ResponseShape {
     private val safeKey = Regex("[A-Za-z_][A-Za-z0-9_]{0,39}")
     fun describe(raw: String): String = runCatching { shape(JSONObject(raw), 0) }.getOrElse { "非 JSON 对象" }
     private fun shape(value: Any?, depth: Int): String {
-        if (depth >= 5) return "…"
+        if (depth >= 8) return "…"
         return when (value) {
-            is JSONObject -> value.keys().asSequence().take(20).map { key ->
+            is JSONObject -> value.keys().asSequence().take(50).map { key ->
                 val name = if (safeKey.matches(key)) key else "[dynamic]"
                 "$name:${shape(value.opt(key), depth + 1)}"
             }.joinToString(prefix = "{", postfix = "}")
