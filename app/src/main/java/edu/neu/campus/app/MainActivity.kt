@@ -12,6 +12,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import edu.neu.campus.app.config.HomeLayoutConfigManager
+import edu.neu.campus.app.feature.exams.ExamDetailScreen
+import edu.neu.campus.app.feature.exams.ExamsScreen
+import edu.neu.campus.app.feature.grades.GradeDetailScreen
+import edu.neu.campus.app.feature.grades.GradesScreen
 import edu.neu.campus.app.feature.timetable.TimetableScreen
 import edu.neu.campus.app.feature.today.TodayScreen
 import edu.neu.campus.app.navigation.AppDestination
@@ -53,17 +57,48 @@ class MainActivity : ComponentActivity() {
                     queryScreen = { PlaceholderPage("查询") },
                     settingsScreen = { PlaceholderPage("我的") },
                     subScreen = { dest ->
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            TopAppBar(
-                                title = "详情",
-                                navigationIcon = {
-                                    Button(onClick = { AppNavigator.popBack() }) {
-                                        Text("‹ 返回")
+                        when (dest) {
+                            is AppDestination.GradeDetail -> {
+                                if (dest.sourceId.isBlank()) {
+                                    GradesScreen(
+                                        onBack = { AppNavigator.popBack() },
+                                        onLoginClick = { launchLogin() }
+                                    )
+                                } else {
+                                    GradeDetailScreen(
+                                        termId = dest.termId,
+                                        sourceId = dest.sourceId,
+                                        onBack = { AppNavigator.popBack() }
+                                    )
+                                }
+                            }
+                            is AppDestination.ExamDetail -> {
+                                if (dest.courseName.isBlank()) {
+                                    ExamsScreen(
+                                        onBack = { AppNavigator.popBack() },
+                                        onLoginClick = { launchLogin() }
+                                    )
+                                } else {
+                                    ExamDetailScreen(
+                                        courseName = dest.courseName,
+                                        onBack = { AppNavigator.popBack() }
+                                    )
+                                }
+                            }
+                            else -> {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    TopAppBar(
+                                        title = "详情",
+                                        navigationIcon = {
+                                            Button(onClick = { AppNavigator.popBack() }) {
+                                                Text("‹ 返回")
+                                            }
+                                        }
+                                    )
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Text("页面：$dest", fontSize = 16.sp)
                                     }
                                 }
-                            )
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("页面：$dest", fontSize = 16.sp)
                             }
                         }
                     }
