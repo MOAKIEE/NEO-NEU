@@ -1,37 +1,57 @@
 package edu.neu.campus.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Text
 
 /**
- * NEO NEU B 类 Surface 统一分组容器 (CampusGroup)。
- * 组件约定：
+ * NEO NEU 统一分组容器 (CampusGroup)。
+ *
+ * 约定：
  * - 承载列表与字段信息，避免列表项反复套小卡
- * - 20dp 圆角，背景为 Surface，标题在卡片外部独立呈现
- * - 内部列表项之间支持平滑的 1dp 分隔线与缩进
+ * - 默认大圆角表面 + 1px 细描边，内部由调用方插入 [CampusGroupDivider] 分隔
+ * - 传入 [onClick] 时整体可点击并带按压缩放
  */
 @Composable
 fun CampusGroup(
     modifier: Modifier = Modifier,
+    cornerRadius: Dp = CampusShapes.large,
+    containerColor: Color = CampusTheme.colors.surface,
+    contentPadding: Dp = CampusSpacing.md,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = CampusTheme.colors
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface)
-            .padding(16.dp)
+            .then(modifier)
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(containerColor)
+            .border(1.dp, colors.outlineVariant, RoundedCornerShape(cornerRadius))
+            .tapScale(onClick = onClick, pressedScale = 0.985f)
+            .padding(contentPadding)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -42,6 +62,8 @@ fun CampusGroup(
 
 /**
  * 带有外部标题和右侧操作按钮的标准区块包装。
+ *
+ * 标题位于卡片外部，保持 Miuix 的「小标题 + 分组」信息层级。
  */
 @Composable
 fun CampusSection(
@@ -55,7 +77,7 @@ fun CampusSection(
     val colors = CampusTheme.colors
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs + 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -69,7 +91,7 @@ fun CampusSection(
                     text = title,
                     fontSize = 18.sp,
                     lineHeight = 26.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    fontWeight = FontWeight.SemiBold,
                     color = colors.textPrimary
                 )
                 if (!subtitle.isNullOrBlank()) {
@@ -85,14 +107,14 @@ fun CampusSection(
             if (actionText != null && onActionClick != null) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onActionClick)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(CampusShapes.pill))
+                        .tapScale(onClick = onActionClick, pressedScale = 0.94f)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = actionText,
                         fontSize = 13.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                        fontWeight = FontWeight.Medium,
                         color = colors.brand
                     )
                 }
@@ -108,7 +130,7 @@ fun CampusSection(
 @Composable
 fun CampusGroupDivider(
     modifier: Modifier = Modifier,
-    startIndent: androidx.compose.ui.unit.Dp = 0.dp
+    startIndent: Dp = 0.dp
 ) {
     val colors = CampusTheme.colors
     Box(
@@ -116,6 +138,6 @@ fun CampusGroupDivider(
             .fillMaxWidth()
             .padding(start = startIndent)
             .height(1.dp)
-            .background(colors.outline.copy(alpha = 0.6f))
+            .background(colors.divider)
     )
 }

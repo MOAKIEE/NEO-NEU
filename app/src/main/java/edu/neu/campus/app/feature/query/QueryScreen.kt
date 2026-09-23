@@ -1,26 +1,31 @@
 package edu.neu.campus.app.feature.query
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,26 +37,48 @@ import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.app.registry.FeatureItem
 import edu.neu.campus.app.registry.FeatureRegistry
 import edu.neu.campus.contract.BalanceKind
+import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusPill
+import edu.neu.campus.ui.components.CampusRow
 import edu.neu.campus.ui.components.CampusSection
+import edu.neu.campus.ui.components.CampusTopBar
+import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.components.tapScale
+import edu.neu.campus.ui.theme.CampusMotion
+import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.extended.Alarm
+import top.yukonga.miuix.kmp.icon.extended.BankCards
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Messages
+import top.yukonga.miuix.kmp.icon.extended.Months
+import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.icon.extended.Share
+import top.yukonga.miuix.kmp.icon.extended.Store
+import top.yukonga.miuix.kmp.icon.extended.Tasks
+import top.yukonga.miuix.kmp.icon.extended.Weeks
 
 /**
  * 查询主页与功能目录。
+ *
  * 组件约定：
  * - 顶部统一搜索，支持名称、别名与拼音
- * - 学习查询：成绩与考试两张重点入口卡片（浅紫/浅橙，高度>=124dp，图标置上）
- * - 常用工具：一个 Surface 分组承载三列图标面板（每个图标底 48dp + 14sp 标签）
- * - 学校服务：独立列表卡片，注明“官方网页”，由用户主动前往浏览器
+ * - 学习查询：成绩与考试两张重点入口卡片，图标置上、功能色柔化渐变
+ * - 常用工具：一个分组承载图标面板（图标底 50dp + 13sp 标签）
+ * - 学校服务：独立入口卡片，标注「官方网页」，由用户主动前往浏览器
+ * - 搜索结果与默认面板之间使用横向淡入切换，避免闪烁
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -73,14 +100,16 @@ fun QueryScreen(
             .fillMaxSize()
             .background(colors.background)
     ) {
-        TopAppBar(title = "查询")
+        CampusTopBar(
+            title = "查询",
+            subtitle = "校园信息与常用入口"
+        )
 
-        // 统一功能搜索栏
-        Row(
+        // 搜索栏
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs)
         ) {
             TextField(
                 value = searchQuery,
@@ -89,16 +118,16 @@ fun QueryScreen(
                 useLabelAsPlaceholder = true,
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.Search,
+                        imageVector = MiuixIcons.Regular.Search,
                         contentDescription = "搜索",
-                        tint = colors.textSecondary
+                        tint = colors.textTertiary
                     )
                 },
                 trailingIcon = {
                     if (isSearching) {
                         IconButton(onClick = { searchQuery = "" }) {
                             Icon(
-                                imageVector = Icons.Default.Clear,
+                                imageVector = MiuixIcons.Regular.Close,
                                 contentDescription = "清除",
                                 tint = colors.textSecondary
                             )
@@ -109,221 +138,257 @@ fun QueryScreen(
             )
         }
 
-        if (isSearching) {
-            // 搜索结果列表
-            if (searchResults.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+        AnimatedContent(
+            targetState = isSearching,
+            transitionSpec = {
+                (fadeIn(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)) +
+                    slideInHorizontally(
+                        animationSpec = tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)
+                    ) { full -> if (targetState) full / 10 else -full / 10 })
+                    .togetherWith(
+                        fadeOut(tween(CampusMotion.Duration.short)) +
+                            slideOutHorizontally(
+                                animationSpec = tween(CampusMotion.Duration.short, easing = CampusMotion.Easing.emphasizedAccelerate)
+                            ) { full -> if (targetState) -full / 10 else full / 10 }
+                    )
+                    .using(SizeTransform(clip = false))
+            },
+            label = "queryPanel",
+            modifier = Modifier.weight(1f)
+        ) { searching ->
+            if (searching) {
+                if (searchResults.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(CampusSpacing.xxl),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(colors.surfaceMuted),
-                            contentAlignment = Alignment.Center
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = colors.textSecondary,
-                                modifier = Modifier.size(28.dp)
+                            CampusIconBadge(
+                                icon = MiuixIcons.Regular.Search,
+                                tint = colors.textTertiary,
+                                container = colors.surfaceMuted,
+                                size = 60.dp,
+                                iconSize = 28.dp,
+                                cornerRadius = CampusShapes.large
                             )
+                            Text(
+                                text = "未找到“$searchQuery”相关的查询功能",
+                                fontSize = 15.sp,
+                                color = colors.textSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                            Button(onClick = { searchQuery = "" }) {
+                                Text("清除关键词")
+                            }
                         }
-                        Text(
-                            text = "未找到“$searchQuery”相关的查询功能",
-                            fontSize = 15.sp,
-                            color = colors.textSecondary,
-                            textAlign = TextAlign.Center
-                        )
-                        Button(onClick = { searchQuery = "" }) {
-                            Text("清除关键词")
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = CampusSpacing.screenHorizontal,
+                            end = CampusSpacing.screenHorizontal,
+                            top = CampusSpacing.xs,
+                            bottom = CampusSpacing.xxl
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
+                    ) {
+                        itemsIndexed(searchResults, key = { _, item -> item.id }) { index, item ->
+                            StaggeredAppear(
+                                index = index,
+                                key = searchQuery,
+                                modifier = Modifier.animateItem()
+                            ) {
+                                CampusCard(
+                                    onClick = { navigateToFeature(item.id) },
+                                    contentPadding = PaddingValues(CampusSpacing.sm + 2.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                                    ) {
+                                        CampusIconBadge(
+                                            icon = getFeatureIcon(item.id),
+                                            tint = colors.brand,
+                                            container = colors.brandContainer,
+                                            size = 42.dp,
+                                            iconSize = 21.dp
+                                        )
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
+                                            ) {
+                                                Text(
+                                                    text = item.title,
+                                                    fontSize = 15.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = colors.textPrimary
+                                                )
+                                                CampusPill(text = item.category.displayName)
+                                            }
+                                            Text(
+                                                text = item.description,
+                                                fontSize = 12.sp,
+                                                color = colors.textSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(
+                            start = CampusSpacing.screenHorizontal,
+                            end = CampusSpacing.screenHorizontal,
+                            top = CampusSpacing.xs,
+                            bottom = CampusSpacing.xxl
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(CampusSpacing.lg)
                 ) {
-                    items(searchResults, key = { it.id }) { item ->
-                        SearchResultItemRow(
-                            item = item,
-                            onClick = { navigateToFeature(item.id) }
-                        )
-                    }
-                }
-            }
-        } else {
-            // 默认精选面板视图
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                // 1. 学习查询：两张重点入口卡片 (C 类浅色卡片，浅紫/浅橙)
-                CampusSection(title = "学习查询") {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        maxItemsInEachRow = if (compact) 1 else 2,
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        // 成绩查询重点卡 (Light Purple)
-                        HighlightEntryCard(
-                            title = "成绩查询",
-                            description = "课程成绩与官方绩点",
-                            icon = Icons.Default.Star,
-                            iconColor = colors.gradeForeground,
-                            cardBg = colors.gradeContainer,
-                            modifier = Modifier.weight(1f),
-                            onClick = { AppNavigator.navigateTo(AppDestination.Grades) }
-                        )
-
-                        // 考试安排重点卡 (Light Orange)
-                        HighlightEntryCard(
-                            title = "考试安排",
-                            description = "考试时间与考场地点",
-                            icon = Icons.Default.DateRange,
-                            iconColor = colors.examForeground,
-                            cardBg = colors.examContainer,
-                            modifier = Modifier.weight(1f),
-                            onClick = { AppNavigator.navigateTo(AppDestination.Exams) }
-                        )
-                    }
-                }
-
-                // 2. 常用工具：一个 Surface 分组承载三列图标面板
-                CampusSection(title = "常用工具") {
-                    CampusGroup {
-                        val tools = listOf(
-                            ToolItem(FeatureRegistry.ID_TIMETABLE, "课表", Icons.Default.DateRange, colors.timetableForeground, colors.timetableContainer),
-                            ToolItem(FeatureRegistry.ID_BELL_SCHEDULE, "校历作息", Icons.Default.Notifications, colors.networkForeground, colors.networkContainer),
-                            ToolItem(FeatureRegistry.ID_CAMPUS_CARD, "校园卡", Icons.Default.AccountBox, colors.cardForeground, colors.cardContainer),
-                            ToolItem(FeatureRegistry.ID_NETWORK, "网费", Icons.Default.Share, colors.networkForeground, colors.networkContainer),
-                            ToolItem(FeatureRegistry.ID_MESSAGES, "消息中心", Icons.Default.Notifications, colors.messageForeground, colors.messageContainer),
-                            ToolItem(FeatureRegistry.ID_TASKS, "待办申请", Icons.Default.CheckCircle, colors.messageForeground, colors.messageContainer)
-                        )
-
-                        val chunked = tools.chunked(toolColumns)
-                        chunked.forEachIndexed { rowIndex, rowItems ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceAround
+                    StaggeredAppear(index = 0) {
+                        CampusSection(title = "学习查询") {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                maxItemsInEachRow = if (compact) 1 else 2,
+                                verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm),
+                                horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                             ) {
-                                rowItems.forEach { tool ->
-                                    ToolPanelItem(
-                                        title = tool.title,
-                                        icon = tool.icon,
-                                        iconColor = tool.iconColor,
-                                        iconBg = tool.iconBg,
-                                        onClick = { navigateToFeature(tool.id) },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                                if (rowItems.size < toolColumns) {
-                                    repeat(toolColumns - rowItems.size) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    }
-                                }
-                            }
-                            if (rowIndex < chunked.lastIndex) {
-                                CampusGroupDivider(startIndent = 16.dp)
+                                HighlightEntryCard(
+                                    title = "成绩查询",
+                                    description = "课程成绩与官方绩点",
+                                    icon = MiuixIcons.Regular.Notes,
+                                    accent = colors.gradeForeground,
+                                    container = colors.gradeContainer,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { AppNavigator.navigateTo(AppDestination.Grades) }
+                                )
+
+                                HighlightEntryCard(
+                                    title = "考试安排",
+                                    description = "考试时间与考场地点",
+                                    icon = MiuixIcons.Regular.Alarm,
+                                    accent = colors.examForeground,
+                                    container = colors.examContainer,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { AppNavigator.navigateTo(AppDestination.Exams) }
+                                )
                             }
                         }
                     }
-                }
 
-                // 3. 学校服务：独立列表卡片，标注“官方网页”
-                CampusSection(title = "学校服务") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(colors.surface)
-                            .clickable { AppNavigator.navigateTo(AppDestination.ServicesCatalog) }
-                            .padding(18.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(colors.brandContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = null,
-                                        tint = colors.brand,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
+                    StaggeredAppear(index = 1) {
+                        CampusSection(title = "常用工具") {
+                            CampusGroup {
+                                val tools = listOf(
+                                    ToolItem(FeatureRegistry.ID_TIMETABLE, "课表", MiuixIcons.Regular.Weeks, colors.timetableForeground, colors.timetableContainer),
+                                    ToolItem(FeatureRegistry.ID_BELL_SCHEDULE, "校历作息", MiuixIcons.Regular.Months, colors.networkForeground, colors.networkContainer),
+                                    ToolItem(FeatureRegistry.ID_CAMPUS_CARD, "校园卡", MiuixIcons.Regular.BankCards, colors.cardForeground, colors.cardContainer),
+                                    ToolItem(FeatureRegistry.ID_NETWORK, "网费", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer),
+                                    ToolItem(FeatureRegistry.ID_MESSAGES, "消息中心", MiuixIcons.Regular.Messages, colors.messageForeground, colors.messageContainer),
+                                    ToolItem(FeatureRegistry.ID_TASKS, "待办申请", MiuixIcons.Regular.Tasks, colors.messageForeground, colors.messageContainer)
+                                )
 
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val chunked = tools.chunked(toolColumns)
+                                chunked.forEachIndexed { rowIndex, rowItems ->
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = CampusSpacing.xs),
+                                        horizontalArrangement = Arrangement.SpaceAround
                                     ) {
-                                        Text(
-                                            text = "学校服务目录",
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colors.textPrimary
+                                        rowItems.forEach { tool ->
+                                            ToolPanelItem(
+                                                title = tool.title,
+                                                icon = tool.icon,
+                                                iconColor = tool.iconColor,
+                                                iconBg = tool.iconBg,
+                                                onClick = { navigateToFeature(tool.id) },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        if (rowItems.size < toolColumns) {
+                                            repeat(toolColumns - rowItems.size) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                            }
+                                        }
+                                    }
+                                    if (rowIndex < chunked.lastIndex) {
+                                        CampusGroupDivider(startIndent = 16.dp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    StaggeredAppear(index = 2) {
+                        CampusSection(title = "学校服务") {
+                            CampusCard(
+                                onClick = { AppNavigator.navigateTo(AppDestination.ServicesCatalog) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                                    ) {
+                                        CampusIconBadge(
+                                            icon = MiuixIcons.Regular.Store,
+                                            tint = colors.brand,
+                                            container = colors.brandContainer
                                         )
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.surfaceMuted)
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "学校服务目录",
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = colors.textPrimary
+                                                )
+                                                CampusPill(text = "官方网页")
+                                            }
                                             Text(
-                                                text = "官方网页",
-                                                fontSize = 10.sp,
+                                                text = "在浏览器中查看学校官方办事大厅与服务指南",
+                                                fontSize = 12.sp,
                                                 color = colors.textSecondary
                                             )
                                         }
                                     }
-                                    Text(
-                                        text = "在浏览器中查看学校官方办事大厅与服务指南",
-                                        fontSize = 12.sp,
-                                        color = colors.textSecondary
+                                    Icon(
+                                        imageVector = MiuixIcons.Basic.ArrowRight,
+                                        contentDescription = null,
+                                        tint = colors.textTertiary,
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
-
-                            Text(
-                                text = "查看目录 ›",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = colors.brand,
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -338,16 +403,15 @@ private data class ToolItem(
 )
 
 /**
- * 重点查询入口卡片（成绩与考试）。
- * 遵循 Section 6：最小高度 124dp，图标置上，标题 16sp，说明 13sp。
+ * 重点查询入口卡片（成绩与考试）：最小高度 128dp，图标置上，柔化渐变底。
  */
 @Composable
 private fun HighlightEntryCard(
     title: String,
     description: String,
     icon: ImageVector,
-    iconColor: Color,
-    cardBg: Color,
+    accent: Color,
+    container: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -355,37 +419,36 @@ private fun HighlightEntryCard(
 
     Box(
         modifier = modifier
-            .defaultMinSize(minHeight = 124.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(cardBg)
-            .clickable(onClick = onClick)
-            .padding(16.dp)
+            .defaultMinSize(minHeight = 128.dp)
+            .clip(RoundedCornerShape(CampusShapes.extraLarge))
+            .background(
+                Brush.linearGradient(
+                    listOf(container, container.copy(alpha = if (colors.isDark) 0.6f else 0.72f))
+                )
+            )
+            .border(1.dp, accent.copy(alpha = 0.16f), RoundedCornerShape(CampusShapes.extraLarge))
+            .tapScale(onClick = onClick, pressedScale = 0.97f)
+            .padding(CampusSpacing.md)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = if (colors.isDark) 0.12f else 0.8f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            CampusIconBadge(
+                icon = icon,
+                tint = accent,
+                container = Color.White.copy(alpha = if (colors.isDark) 0.12f else 0.75f),
+                size = 46.dp,
+                iconSize = 24.dp,
+                cornerRadius = CampusShapes.small
+            )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(CampusSpacing.md))
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     text = title,
-                    fontSize = 16.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary
                 )
@@ -402,8 +465,7 @@ private fun HighlightEntryCard(
 }
 
 /**
- * 常用工具三列图标面板单项。
- * 遵循 Section 6：每项最小高 88dp，48dp 图标底 + 完整标签。
+ * 常用工具面板单项：最小高 88dp，图标底 50dp + 完整标签。
  */
 @Composable
 private fun ToolPanelItem(
@@ -419,26 +481,20 @@ private fun ToolPanelItem(
     Column(
         modifier = modifier
             .defaultMinSize(minHeight = 88.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .clip(RoundedCornerShape(CampusShapes.small))
+            .tapScale(onClick = onClick, pressedScale = 0.94f)
+            .padding(vertical = CampusSpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(iconBg),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = iconColor,
-                modifier = Modifier.size(24.dp)
-            )
-        }
+        CampusIconBadge(
+            icon = icon,
+            tint = iconColor,
+            container = iconBg,
+            size = 50.dp,
+            iconSize = 24.dp,
+            cornerRadius = CampusShapes.small + 2.dp
+        )
         Text(
             text = title,
             fontSize = 13.sp,
@@ -450,109 +506,18 @@ private fun ToolPanelItem(
     }
 }
 
-/**
- * 搜索结果条目行。
- */
-@Composable
-private fun SearchResultItemRow(
-    item: FeatureItem,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val colors = CampusTheme.colors
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.surface)
-            .clickable(onClick = onClick)
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.brandContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = getFeatureIcon(item.id),
-                        contentDescription = null,
-                        tint = colors.brand,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = item.title,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(colors.surfaceMuted)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = item.category.displayName,
-                                fontSize = 10.sp,
-                                color = colors.textSecondary
-                            )
-                        }
-                    }
-                    Text(
-                        text = item.description,
-                        fontSize = 12.sp,
-                        color = colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "进入",
-                tint = colors.brand,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-    }
-}
-
 private fun getFeatureIcon(id: String): ImageVector {
     return when (id) {
-        FeatureRegistry.ID_GRADES -> Icons.Default.Star
-        FeatureRegistry.ID_EXAMS -> Icons.Default.DateRange
-        FeatureRegistry.ID_TIMETABLE -> Icons.Default.DateRange
-        FeatureRegistry.ID_BELL_SCHEDULE -> Icons.Default.Notifications
-        FeatureRegistry.ID_CAMPUS_CARD -> Icons.Default.AccountBox
-        FeatureRegistry.ID_NETWORK -> Icons.Default.Share
-        FeatureRegistry.ID_MESSAGES -> Icons.Default.Notifications
-        FeatureRegistry.ID_TASKS -> Icons.Default.CheckCircle
-        FeatureRegistry.ID_SERVICES_CATALOG -> Icons.Default.Menu
-        else -> Icons.Default.Search
+        FeatureRegistry.ID_GRADES -> MiuixIcons.Regular.Notes
+        FeatureRegistry.ID_EXAMS -> MiuixIcons.Regular.Alarm
+        FeatureRegistry.ID_TIMETABLE -> MiuixIcons.Regular.Weeks
+        FeatureRegistry.ID_BELL_SCHEDULE -> MiuixIcons.Regular.Months
+        FeatureRegistry.ID_CAMPUS_CARD -> MiuixIcons.Regular.BankCards
+        FeatureRegistry.ID_NETWORK -> MiuixIcons.Regular.Share
+        FeatureRegistry.ID_MESSAGES -> MiuixIcons.Regular.Messages
+        FeatureRegistry.ID_TASKS -> MiuixIcons.Regular.Tasks
+        FeatureRegistry.ID_SERVICES_CATALOG -> MiuixIcons.Regular.Store
+        else -> MiuixIcons.Regular.Search
     }
 }
 

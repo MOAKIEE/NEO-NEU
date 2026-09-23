@@ -1,24 +1,28 @@
 package edu.neu.campus.app.feature.timetable
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,10 +31,20 @@ import edu.neu.campus.app.CampusDataProvider
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.*
+import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
+import edu.neu.campus.ui.components.CampusFilterChip
 import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusSelectionRow
+import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.components.tapScale
+import edu.neu.campus.ui.theme.CampusMotion
+import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import edu.neu.campus.ui.timetable.CourseDetailBottomSheet
 import edu.neu.campus.ui.timetable.TimetableGrid
@@ -40,7 +54,16 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
+import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.ListView
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 
 @Composable
@@ -117,42 +140,24 @@ fun TimetableScreen(
     }
 
     val currentWeekObj = weeks.firstOrNull { it.number == selectedWeekNumber }
+    val showGrid = !isListView && LocalDensity.current.fontScale < 1.3f &&
+        !(selectedCampusId == null && campuses.size > 1)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
     ) {
-        // 1. 顶部标题栏（包含网格/列表切换与更多菜单）
-        TopAppBar(
+        // 1. 顶部标题栏
+        CampusTopBar(
             title = "课表",
+            subtitle = currentTerm?.name.orEmpty(),
             actions = {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.brandContainer)
-                        .clickable { isListView = !isListView }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isListView) Icons.Default.DateRange else Icons.Default.Menu,
-                        contentDescription = null,
-                        tint = colors.brand,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = if (isListView) "网格" else "列表",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.brand
-                    )
-                }
+                ViewModeToggle(isListView = isListView, onToggle = { isListView = !isListView })
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(onClick = { showUnscheduledSheet = true }) {
                     Icon(
-                        imageVector = Icons.Default.MoreVert,
+                        imageVector = MiuixIcons.Regular.More,
                         contentDescription = "更多",
                         tint = colors.textPrimary
                     )
@@ -160,155 +165,73 @@ fun TimetableScreen(
             }
         )
 
-        // 2. 学期选择与校区筛选栏（同一控制行，Section 5）
+        // 2. 学期与校区筛选
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xxs),
+            horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.surface)
-                    .clickable { showTermPicker = true }
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = currentTerm?.name ?: "选择学期",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textPrimary
-                )
-                Text(text = " ▾", fontSize = 11.sp, color = colors.textSecondary)
-            }
-
-            // 校区筛选
+            CampusFilterChip(
+                text = currentTerm?.name ?: "选择学期",
+                onClick = { showTermPicker = true }
+            )
             if (campuses.size > 1) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surface)
-                        .clickable {
-                            val allIds = listOf<String?>(null) + campuses.map { it.id }
-                            val nextIndex = (allIds.indexOf(selectedCampusId) + 1) % allIds.size
-                            selectedCampusId = allIds[nextIndex]
-                        }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
-                ) {
-                    val label = if (selectedCampusId == null) "全部校区" else campuses.firstOrNull { it.id == selectedCampusId }?.name ?: "校区"
-                    Text(text = "$label ▾", fontSize = 12.sp, color = colors.textSecondary)
-                }
+                val campusLabel = if (selectedCampusId == null) "全部校区"
+                else campuses.firstOrNull { it.id == selectedCampusId }?.name ?: "校区"
+                CampusFilterChip(
+                    text = campusLabel,
+                    active = selectedCampusId != null,
+                    onClick = {
+                        val allIds = listOf<String?>(null) + campuses.map { it.id }
+                        val nextIndex = (allIds.indexOf(selectedCampusId) + 1) % allIds.size
+                        selectedCampusId = allIds[nextIndex]
+                    }
+                )
             }
         }
 
-        // 3. 周次控制器（独立一行，‹ 上一周、第 N 周、› 下一周、回本周）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // 上一周按钮 (touch target >= 44dp)
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surface)
-                        .clickable(enabled = (selectedWeekNumber ?: 1) > 1) {
-                            val current = selectedWeekNumber ?: 1
-                            if (current > 1) selectedWeekNumber = current - 1
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "上一周",
-                        tint = if ((selectedWeekNumber ?: 1) > 1) colors.textPrimary else colors.textSecondary.copy(alpha = 0.35f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                // 当前周次指示与下拉
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surface)
-                        .clickable { showWeekPicker = true }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val sDate = currentWeekObj?.startDate
-                    val eDate = currentWeekObj?.endDate
-                    val dateRange = if (sDate != null && eDate != null) {
-                        " · ${sDate.takeLast(5)}—${eDate.takeLast(5)}"
-                    } else ""
-                    Text(
-                        text = "第 ${selectedWeekNumber ?: 1} 周$dateRange ▾",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.brand
-                    )
-                }
-
-                // 下一周按钮
+        // 3. 周次控制器
+        WeekController(
+            weekNumber = selectedWeekNumber ?: 1,
+            week = currentWeekObj,
+            maxWeek = if (weeks.isNotEmpty()) weeks.maxOf { it.number } else 25,
+            currentActualWeek = weeks.firstOrNull { it.isCurrent }?.number,
+            onPrevious = {
+                val current = selectedWeekNumber ?: 1
+                if (current > 1) selectedWeekNumber = current - 1
+            },
+            onNext = {
+                val current = selectedWeekNumber ?: 1
                 val maxWeek = if (weeks.isNotEmpty()) weeks.maxOf { it.number } else 25
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surface)
-                        .clickable(enabled = (selectedWeekNumber ?: 1) < maxWeek) {
-                            val current = selectedWeekNumber ?: 1
-                            if (current < maxWeek) selectedWeekNumber = current + 1
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "下一周",
-                        tint = if ((selectedWeekNumber ?: 1) < maxWeek) colors.textPrimary else colors.textSecondary.copy(alpha = 0.35f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            // 回本周按钮（离开本周时出现）
-            val currentActualWeek = weeks.firstOrNull { it.isCurrent }?.number
-            if (currentActualWeek != null && selectedWeekNumber != currentActualWeek) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.brand)
-                        .clickable { selectedWeekNumber = currentActualWeek }
-                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "回本周",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White
-                    )
-                }
-            }
-        }
+                if (current < maxWeek) selectedWeekNumber = current + 1
+            },
+            onPickWeek = { showWeekPicker = true },
+            onBackToCurrent = { weeks.firstOrNull { it.isCurrent }?.let { selectedWeekNumber = it.number } }
+        )
 
         if (termsSnapshot.error != null || weeksSnapshot?.error != null) {
-            LoadStatePanel(false, error = weeksSnapshot?.error ?: termsSnapshot.error,
-                onRetry = { coroutineScope.launch { academic.refreshTerms(); currentTerm?.let { academic.refreshWeeks(it.id) } } },
-                onLogin = onLoginClick)
+            LoadStatePanel(
+                false,
+                error = weeksSnapshot?.error ?: termsSnapshot.error,
+                onRetry = {
+                    coroutineScope.launch {
+                        academic.refreshTerms()
+                        currentTerm?.let { academic.refreshWeeks(it.id) }
+                    }
+                },
+                onLogin = onLoginClick
+            )
         }
-        if (timetableSnapshot?.isStale == true) SafeDataTag(text = "当前显示上次同步课表，可能已变化")
-        // 状态处理：加载与异常重试
-        if (timetableSnapshot != null && (timetableSnapshot.phase == QueryPhase.LOADING || timetableSnapshot.phase == QueryPhase.FAILED)) {
+        if (timetableSnapshot?.isStale == true) {
+            Box(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal)) {
+                SafeDataTag(text = "当前显示上次同步课表，可能已变化")
+            }
+        }
+        if (timetableSnapshot != null &&
+            (timetableSnapshot.phase == QueryPhase.LOADING || timetableSnapshot.phase == QueryPhase.FAILED)
+        ) {
             LoadStatePanel(
                 isLoading = timetableSnapshot.phase == QueryPhase.LOADING && timetableSnapshot.data == null,
                 error = timetableSnapshot.error,
@@ -321,132 +244,75 @@ fun TimetableScreen(
             )
         }
 
-        // 课表内容展示
+        // 4. 课表内容：网格 <-> 列表 转场
         Box(modifier = Modifier.weight(1f)) {
-            if (!isListView && LocalDensity.current.fontScale < 1.3f && !(selectedCampusId == null && campuses.size > 1)) {
-                // 网格视图
-                TimetableGrid(
-                    courses = filteredCourses,
-                    currentWeek = currentWeekObj,
-                    sections = rawTable?.sectionsByCampus?.let { if (selectedCampusId != null) it[selectedCampusId].orEmpty() else it.values.flatten() }.orEmpty(),
-                    onCourseClick = { inspectingCourse = it },
-                    onConflictClick = { conflictCourses = it }
-                )
-            } else {
-                // 列表视图：按周一至周日以 B 类 Surface 分组排布
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    for (day in 1..7) {
-                        val dayCourses = filteredCourses.filter { it.dayOfWeek == day }.sortedWith(compareBy({ it.campusId }, { it.beginSection }))
-                        if (dayCourses.isNotEmpty()) {
-                            item {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(
-                                        text = "星期${dayOfWeekText(day)}${if (selectedCampusId == null && campuses.size > 1) " · 按校区显示" else ""}",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.textPrimary,
-                                        modifier = Modifier.padding(start = 4.dp)
-                                    )
-                                    CampusGroup {
-                                        dayCourses.forEachIndexed { idx, c ->
-                                            val (accentColor, _) = colors.courseColor(c.title)
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { inspectingCourse = c }
-                                                    .padding(vertical = 10.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.weight(1f),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .width(4.dp)
-                                                            .height(36.dp)
-                                                            .clip(RoundedCornerShape(2.dp))
-                                                            .background(accentColor)
-                                                    )
-                                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                        Text(
-                                                            text = if (campuses.size > 1) "${c.title} · ${campuses.firstOrNull { it.id == c.campusId }?.name ?: c.campusId}" else c.title,
-                                                            fontSize = 15.sp,
-                                                            fontWeight = FontWeight.Medium,
-                                                            color = colors.textPrimary
-                                                        )
-                                                        val timeStr = if (!c.beginTime.isNullOrBlank()) " (${c.beginTime}-${c.endTime})" else ""
-                                                        Text(
-                                                            text = "第 ${c.beginSection}-${c.endSection} 节$timeStr · ${c.place ?: "教室待定"}",
-                                                            fontSize = 12.sp,
-                                                            color = colors.textSecondary
-                                                        )
-                                                    }
-                                                }
-                                                val teacherName = c.teacher
-                                                if (!teacherName.isNullOrBlank()) {
-                                                    Text(
-                                                        text = teacherName,
-                                                        fontSize = 12.sp,
-                                                        color = colors.textSecondary,
-                                                        modifier = Modifier.padding(start = 8.dp)
-                                                    )
-                                                }
-                                            }
-                                            if (idx < dayCourses.lastIndex) {
-                                                CampusGroupDivider(startIndent = 14.dp)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (filteredCourses.isEmpty() && timetableSnapshot?.phase == QueryPhase.READY) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(40.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "本周暂无已安排课程",
-                                    color = colors.textSecondary,
-                                    fontSize = 15.sp
-                                )
-                            }
-                        }
-                    }
+            AnimatedContent(
+                targetState = showGrid,
+                transitionSpec = {
+                    (fadeIn(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)) +
+                        androidx.compose.animation.scaleIn(
+                            initialScale = 0.98f,
+                            animationSpec = tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)
+                        ))
+                        .togetherWith(fadeOut(tween(CampusMotion.Duration.instant)))
+                        .using(SizeTransform(clip = false))
+                },
+                label = "timetableMode"
+            ) { gridMode ->
+                if (gridMode) {
+                    TimetableGrid(
+                        courses = filteredCourses,
+                        currentWeek = currentWeekObj,
+                        sections = rawTable?.sectionsByCampus?.let {
+                            if (selectedCampusId != null) it[selectedCampusId].orEmpty() else it.values.flatten()
+                        }.orEmpty(),
+                        onCourseClick = { inspectingCourse = it },
+                        onConflictClick = { conflictCourses = it }
+                    )
+                } else {
+                    TimetableDayList(
+                        courses = filteredCourses,
+                        showCampusName = campuses.size > 1,
+                        campusNameOf = { id -> campuses.firstOrNull { it.id == id }?.name ?: id },
+                        isReady = timetableSnapshot?.phase == QueryPhase.READY,
+                        onCourseClick = { inspectingCourse = it }
+                    )
                 }
             }
         }
 
-        // 底部来源及未排课提示
+        // 5. 底部来源与未排课提示
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(colors.surface)
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             val unscheduledCount = (rawTable?.unscheduled?.size ?: 0) + (rawTable?.practice?.size ?: 0)
             if (unscheduledCount > 0) {
-                Text(
-                    text = "未排课或实践课程 $unscheduledCount 项 ›",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.brand,
-                    modifier = Modifier.clickable { showUnscheduledSheet = true }
-                )
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(CampusShapes.pill))
+                        .tapScale(onClick = { showUnscheduledSheet = true }, pressedScale = 0.95f)
+                        .padding(vertical = 4.dp, horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "未排课或实践课程 $unscheduledCount 项",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.brand
+                    )
+                    Icon(
+                        imageVector = MiuixIcons.Basic.ArrowRight,
+                        contentDescription = null,
+                        tint = colors.brand,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
             } else {
                 Spacer(modifier = Modifier.width(1.dp))
             }
@@ -459,7 +325,7 @@ fun TimetableScreen(
         }
     }
 
-    // 抽屉 1：课程详情原生抽屉
+    // 抽屉 1：课程详情
     inspectingCourse?.let { c ->
         val others = rawTable?.arranged?.filter { it.title == c.title && it != c }.orEmpty()
         val campusName = campuses.firstOrNull { it.id == c.campusId }?.name
@@ -472,7 +338,7 @@ fun TimetableScreen(
         )
     }
 
-    // 抽屉 2：冲突课程选择抽屉
+    // 抽屉 2：冲突课程选择
     conflictCourses?.let { conflicts ->
         OverlayBottomSheet(
             show = true,
@@ -485,8 +351,8 @@ fun TimetableScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(CampusSpacing.lg),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
             ) {
                 Text(
                     text = "该时间段存在多门排课，请选择具体课程查看详情：",
@@ -495,52 +361,56 @@ fun TimetableScreen(
                 )
                 CampusGroup {
                     conflicts.forEachIndexed { idx, c ->
-                        val (accentColor, _) = colors.courseColor(c.title)
+                        val accent = colors.courseAccent(c.title)
+                        val (_, container) = colors.courseColor(c.title)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    conflictCourses = null
-                                    inspectingCourse = c
-                                }
-                                .padding(vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(4.dp)
-                                        .height(36.dp)
-                                        .clip(RoundedCornerShape(2.dp))
-                                        .background(accentColor)
+                                .tapScale(
+                                    onClick = {
+                                        conflictCourses = null
+                                        inspectingCourse = c
+                                    },
+                                    pressedScale = 0.985f
                                 )
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        text = if (campuses.size > 1) "${c.title} · ${campuses.firstOrNull { it.id == c.campusId }?.name ?: c.campusId}" else c.title,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textPrimary
-                                    )
-                                    Text(
-                                        text = "第 ${c.beginSection}-${c.endSection} 节 · ${c.place ?: "教室待定"}",
-                                        fontSize = 12.sp,
-                                        color = colors.textSecondary
-                                    )
-                                }
+                                .padding(vertical = CampusSpacing.xxs + 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                        ) {
+                            CampusIconBadge(
+                                icon = MiuixIcons.Regular.Notes,
+                                tint = accent,
+                                container = container
+                            )
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = if (campuses.size > 1) {
+                                        "${c.title} · ${campuses.firstOrNull { it.id == c.campusId }?.name ?: c.campusId}"
+                                    } else c.title,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "第 ${c.beginSection}-${c.endSection} 节 · ${c.place ?: "教室待定"}",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
                             }
-                            Text(
-                                text = "详情 ›",
-                                fontSize = 13.sp,
-                                color = colors.brand
+                            Icon(
+                                imageVector = MiuixIcons.Basic.ArrowRight,
+                                contentDescription = null,
+                                tint = colors.textTertiary,
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                         if (idx < conflicts.lastIndex) {
-                            CampusGroupDivider(startIndent = 14.dp)
+                            CampusGroupDivider(startIndent = 56.dp)
                         }
                     }
                 }
@@ -548,7 +418,7 @@ fun TimetableScreen(
         }
     }
 
-    // 抽屉 3：周次选择抽屉
+    // 抽屉 3：周次选择
     if (showWeekPicker) {
         OverlayBottomSheet(
             show = true,
@@ -559,45 +429,29 @@ fun TimetableScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .heightIn(max = 420.dp)
+                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
-                items(weeks) { w ->
+                itemsIndexed(weeks) { index, w ->
                     val isSelected = w.number == selectedWeekNumber
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) colors.brandContainer else colors.surface)
-                            .clickable {
+                    StaggeredAppear(index = index, key = weeks.size) {
+                        CampusSelectionRow(
+                            title = "第 ${w.number} 周" + if (w.isCurrent) "（本周）" else "",
+                            trailing = if (w.startDate != null && w.endDate != null) "${w.startDate} ~ ${w.endDate}" else null,
+                            selected = isSelected,
+                            onClick = {
                                 selectedWeekNumber = w.number
                                 showWeekPicker = false
                             }
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "第 ${w.number} 周" + if (w.isCurrent) " (本周)" else "",
-                            fontSize = 15.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) colors.brand else colors.textPrimary
                         )
-                        if (w.startDate != null && w.endDate != null) {
-                            Text(
-                                text = "${w.startDate} ~ ${w.endDate}",
-                                fontSize = 12.sp,
-                                color = if (isSelected) colors.brand else colors.textSecondary
-                            )
-                        }
                     }
                 }
             }
         }
     }
 
-    // 抽屉 4：学期选择抽屉
+    // 抽屉 4：学期选择
     if (showTermPicker) {
         OverlayBottomSheet(
             show = true,
@@ -608,31 +462,22 @@ fun TimetableScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .heightIn(max = 420.dp)
+                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
-                items(terms) { t ->
+                itemsIndexed(terms) { index, t ->
                     val isSelected = t.id == currentTerm?.id
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) colors.brandContainer else colors.surface)
-                            .clickable {
+                    StaggeredAppear(index = index, key = terms.size) {
+                        CampusSelectionRow(
+                            title = t.name + if (t.isCurrent) "（当前）" else "",
+                            trailing = null,
+                            selected = isSelected,
+                            onClick = {
                                 selectedTermId = t.id
                                 selectedWeekNumber = null
                                 showTermPicker = false
                             }
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = t.name + if (t.isCurrent) " (当前)" else "",
-                            fontSize = 15.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) colors.brand else colors.textPrimary
                         )
                     }
                 }
@@ -652,37 +497,48 @@ fun TimetableScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(CampusSpacing.lg),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
             ) {
-                // 快捷跳转作息时间与校历
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                CampusCard(
+                    onClick = {
+                        showUnscheduledSheet = false
+                        AppNavigator.navigateTo(AppDestination.BellSchedule)
+                    }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.brandContainer)
-                            .clickable {
-                                showUnscheduledSheet = false
-                                AppNavigator.navigateTo(AppDestination.BellSchedule)
-                            }
-                            .padding(14.dp),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                     ) {
-                        Text(
-                            text = "查看校区作息时间",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.brand
+                        CampusIconBadge(
+                            icon = MiuixIcons.Regular.GridView,
+                            tint = colors.brand,
+                            container = colors.brandContainer
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "查看校区作息时间",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.textPrimary
+                            )
+                            Text(
+                                text = "按学校返回的节次时间展示",
+                                fontSize = 12.sp,
+                                color = colors.textSecondary
+                            )
+                        }
+                        Icon(
+                            imageVector = MiuixIcons.Basic.ArrowRight,
+                            contentDescription = null,
+                            tint = colors.textTertiary,
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
 
                 Text(
-                    text = "未安排节次或集中实践课程 (${unscheduledList.size} 门)：",
+                    text = "未安排节次或集中实践课程（${unscheduledList.size} 门）",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.textPrimary
@@ -699,7 +555,7 @@ fun TimetableScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 10.dp),
+                                    .padding(vertical = CampusSpacing.xs),
                                 verticalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 Text(
@@ -716,6 +572,295 @@ fun TimetableScreen(
                             }
                             if (idx < unscheduledList.lastIndex) {
                                 CampusGroupDivider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 网格/列表切换：胶囊按钮，图标随状态切换并有位移过渡。 */
+@Composable
+private fun ViewModeToggle(
+    isListView: Boolean,
+    onToggle: () -> Unit
+) {
+    val colors = CampusTheme.colors
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(CampusShapes.pill))
+            .background(colors.brandContainer)
+            .tapScale(onClick = onToggle, pressedScale = 0.94f)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        AnimatedContent(
+            targetState = isListView,
+            transitionSpec = {
+                (fadeIn(tween(CampusMotion.Duration.short)) +
+                    slideInHorizontally(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)) { it / 2 })
+                    .togetherWith(
+                        fadeOut(tween(CampusMotion.Duration.instant)) +
+                            slideOutHorizontally(tween(CampusMotion.Duration.short, easing = CampusMotion.Easing.emphasizedAccelerate)) { -it / 2 }
+                    )
+            },
+            label = "viewModeIcon"
+        ) { list ->
+            Icon(
+                imageVector = if (list) MiuixIcons.Regular.GridView else MiuixIcons.Regular.ListView,
+                contentDescription = null,
+                tint = colors.brand,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Text(
+            text = if (isListView) "网格" else "列表",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.brand
+        )
+    }
+}
+
+/** 周次控制条。 */
+@Composable
+private fun WeekController(
+    weekNumber: Int,
+    week: TeachingWeek?,
+    maxWeek: Int,
+    currentActualWeek: Int?,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onPickWeek: () -> Unit,
+    onBackToCurrent: () -> Unit
+) {
+    val colors = CampusTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xxs),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
+        ) {
+            StepperButton(
+                enabled = weekNumber > 1,
+                onClick = onPrevious
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Regular.ChevronBackward,
+                    contentDescription = "上一周",
+                    tint = if (weekNumber > 1) colors.textPrimary else colors.textDisabled,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(CampusShapes.pill))
+                    .background(colors.brandContainer)
+                    .tapScale(onClick = onPickWeek, pressedScale = 0.95f)
+                    .padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val sDate = week?.startDate
+                val eDate = week?.endDate
+                val dateRange = if (sDate != null && eDate != null) " · ${sDate.takeLast(5)}—${eDate.takeLast(5)}" else ""
+                Text(
+                    text = "第 $weekNumber 周$dateRange",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.brand
+                )
+                Icon(
+                    imageVector = MiuixIcons.Regular.ExpandMore,
+                    contentDescription = null,
+                    tint = colors.brand,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+
+            StepperButton(
+                enabled = weekNumber < maxWeek,
+                onClick = onNext
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Regular.ChevronForward,
+                    contentDescription = "下一周",
+                    tint = if (weekNumber < maxWeek) colors.textPrimary else colors.textDisabled,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = currentActualWeek != null && weekNumber != currentActualWeek,
+            enter = fadeIn(tween(CampusMotion.Duration.medium)) +
+                expandVertically(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)),
+            exit = fadeOut(tween(CampusMotion.Duration.instant)) + shrinkVertically(tween(CampusMotion.Duration.short))
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(CampusShapes.pill))
+                    .background(colors.brand)
+                    .tapScale(onClick = onBackToCurrent, pressedScale = 0.94f)
+                    .padding(horizontal = CampusSpacing.sm + 2.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Regular.Ok,
+                    contentDescription = null,
+                    tint = colors.onBrand,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "回本周",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.onBrand
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepperButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val colors = CampusTheme.colors
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(RoundedCornerShape(CampusShapes.extraSmall))
+            .background(colors.surface)
+            .border(1.dp, colors.outlineVariant, RoundedCornerShape(CampusShapes.extraSmall))
+            .tapScale(onClick = onClick, enabled = enabled, pressedScale = 0.9f),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
+    }
+}
+
+/** 每日列表视图：按星期分组，逐组交错入场。 */
+@Composable
+private fun TimetableDayList(
+    courses: List<CourseOccurrence>,
+    showCampusName: Boolean,
+    campusNameOf: (String) -> String,
+    isReady: Boolean,
+    onCourseClick: (CourseOccurrence) -> Unit
+) {
+    val colors = CampusTheme.colors
+    val days = remember(courses) {
+        (1..7).map { day ->
+            day to courses.filter { it.dayOfWeek == day }
+                .sortedWith(compareBy({ it.campusId }, { it.beginSection }))
+        }.filter { it.second.isNotEmpty() }
+    }
+
+    if (days.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(CampusSpacing.xxl),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isReady) {
+                Text(
+                    text = "本周暂无已安排课程",
+                    color = colors.textSecondary,
+                    fontSize = 15.sp
+                )
+            }
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs),
+        verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
+    ) {
+        itemsIndexed(days, key = { _, item -> item.first }) { dayIndex, (day, dayCourses) ->
+            StaggeredAppear(
+                index = dayIndex,
+                key = days.size,
+                modifier = Modifier.animateItem()
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)) {
+                    Text(
+                        text = "星期${dayOfWeekText(day)}",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                    CampusGroup {
+                        dayCourses.forEachIndexed { idx, c ->
+                            val accent = colors.courseAccent(c.sourceId ?: "${c.campusId}:${c.title}")
+                            val (_, container) = colors.courseColor(c.sourceId ?: "${c.campusId}:${c.title}")
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .tapScale(onClick = { onCourseClick(c) }, pressedScale = 0.985f)
+                                    .padding(vertical = CampusSpacing.xs),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                                ) {
+                                    CampusIconBadge(
+                                        icon = MiuixIcons.Regular.Notes,
+                                        tint = accent,
+                                        container = container,
+                                        size = 38.dp,
+                                        iconSize = 20.dp
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = if (showCampusName) "${c.title} · ${campusNameOf(c.campusId)}" else c.title,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        val timeStr = if (!c.beginTime.isNullOrBlank()) "（${c.beginTime}-${c.endTime}）" else ""
+                                        Text(
+                                            text = "第 ${c.beginSection}-${c.endSection} 节$timeStr · ${c.place ?: "教室待定"}",
+                                            fontSize = 12.sp,
+                                            color = colors.textSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                if (!c.teacher.isNullOrBlank()) {
+                                    Text(
+                                        text = c.teacher!!,
+                                        fontSize = 12.sp,
+                                        color = colors.textTertiary,
+                                        modifier = Modifier.padding(start = CampusSpacing.xs)
+                                    )
+                                }
+                            }
+                            if (idx < dayCourses.lastIndex) {
+                                CampusGroupDivider(startIndent = 50.dp)
                             }
                         }
                     }
