@@ -12,25 +12,24 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import edu.neu.campus.ui.components.CampusGroup
+import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.theme.LocalCampusColors
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 data class CampusServiceItem(
     val id: String,
@@ -40,19 +39,13 @@ data class CampusServiceItem(
     val officialUrl: String
 )
 
-/**
- * 学校服务目录页面。
- * 遵循 docs/06-UI页面布局设计.md 第 5 节要求：
- * - 列表项带“官方网页”标签
- * - 点击进入简单服务说明，由用户自主决定“在浏览器打开”或复制网址
- * - 核心查询功能不在此替代，严禁业务 WebView 套壳
- */
 @Composable
 fun ServicesCatalogScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val campusColors = LocalCampusColors.current
     var selectedService by remember { mutableStateOf<CampusServiceItem?>(null) }
 
     val serviceList = remember {
@@ -105,9 +98,9 @@ fun ServicesCatalogScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background)
+            .background(campusColors.background)
     ) {
-        edu.neu.campus.ui.components.CampusTopBar(
+        CampusTopBar(
             title = "学校服务目录",
             onBack = onBack
         )
@@ -123,8 +116,7 @@ fun ServicesCatalogScreen(
         ) {
             items(serviceList, key = { it.id }) { item ->
                 Card(
-                    colors = CardDefaults.defaultColors(),
-                    insideMargin = PaddingValues(14.dp),
+                    insideMargin = PaddingValues(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { selectedService = item }
@@ -136,29 +128,29 @@ fun ServicesCatalogScreen(
                     ) {
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
                                     text = item.name,
                                     fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MiuixTheme.colorScheme.onSurface
+                                    fontWeight = FontWeight.Bold,
+                                    color = campusColors.textPrimary
                                 )
 
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(campusColors.surfaceMuted)
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
+                                    ) {
                                     Text(
-                                        text = "官方网页",
-                                        fontSize = 10.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                        text = item.category,
+                                        fontSize = 11.sp,
+                                        color = campusColors.textSecondary
                                     )
                                 }
                             }
@@ -166,15 +158,15 @@ fun ServicesCatalogScreen(
                             Text(
                                 text = item.description,
                                 fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                color = campusColors.textSecondary,
                                 maxLines = 1
                             )
                         }
 
                         Text(
                             text = "查看 ›",
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.primary,
+                            fontSize = 13.sp,
+                            color = campusColors.brand,
                             modifier = Modifier.padding(start = 8.dp)
                         )
                     }
@@ -188,48 +180,64 @@ fun ServicesCatalogScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MiuixTheme.colorScheme.background.copy(alpha = 0.6f))
+                .background(Color.Black.copy(alpha = 0.5f))
                 .clickable { selectedService = null }
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
             Card(
-                colors = CardDefaults.defaultColors(),
                 insideMargin = PaddingValues(20.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = false) {}
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = service.name,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = service.name,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = campusColors.textPrimary
+                        )
 
-                    Text(
-                        text = "服务类别：${service.category}",
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                    )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(campusColors.brandContainer)
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = service.category,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = campusColors.brand
+                            )
+                        }
+                    }
 
                     Text(
                         text = service.description,
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurface,
-                        lineHeight = 18.sp
+                        color = campusColors.textPrimary,
+                        lineHeight = 20.sp
                     )
 
-                    Text(
-                        text = "官方系统访问地址：\n${service.officialUrl}",
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                    )
+                    CampusGroup {
+                        Text(
+                            text = "官方系统访问地址：\n${service.officialUrl}",
+                            fontSize = 12.sp,
+                            color = campusColors.textSecondary,
+                            lineHeight = 18.sp
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Button(
                             onClick = {
@@ -240,6 +248,7 @@ fun ServicesCatalogScreen(
                                     Toast.makeText(context, "无法启动浏览器", Toast.LENGTH_SHORT).show()
                                 }
                             },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("在浏览器打开")

@@ -8,10 +8,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,29 +21,25 @@ import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.config.HomeLayoutConfigManager
 import edu.neu.campus.app.registry.FeatureRegistry
 import edu.neu.campus.ui.components.CampusCheckbox
+import edu.neu.campus.ui.components.CampusGroup
+import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusSwitch
+import edu.neu.campus.ui.components.CampusTopBar
+import edu.neu.campus.ui.theme.LocalCampusColors
 import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/**
- * 首页布局可配置管理页面。
- * 落实 docs/06-UI页面布局设计.md 第 15 节扩展规则：
- * - 快捷查询前 3 项自选功能（第 4 项固定“全部”）
- * - 摘要区模块显示/隐藏开关与上下移动排序
- * - 支持恢复默认设置，本地持久化保存
- */
 @Composable
 fun HomeConfigScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val campusColors = LocalCampusColors.current
     val currentQuickIds = HomeLayoutConfigManager.quickActionIds
     val modules = HomeLayoutConfigManager.modules
 
@@ -56,9 +50,9 @@ fun HomeConfigScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background)
+            .background(campusColors.background)
     ) {
-        edu.neu.campus.ui.components.CampusTopBar(
+        CampusTopBar(
             title = "首页布局配置",
             onBack = onBack
         )
@@ -67,36 +61,21 @@ fun HomeConfigScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. 快捷查询栏自选（前 3 项）
-            Card(
-                colors = CardDefaults.defaultColors(),
-                insideMargin = PaddingValues(16.dp),
-                modifier = Modifier.fillMaxWidth()
+            // 1. 快捷查询栏自选
+            CampusSection(
+                title = "快捷入口配置",
+                subtitle = "最多选择 3 项，第 4 项固定为“全部”"
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "快捷查询栏配置 (最多勾选 3 项)",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-
-                    Text(
-                        text = "选中的前 3 个功能将在首页第一屏快捷栏展示，第 4 项固定为“全部”，点击即可跳转对应功能。",
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                        lineHeight = 17.sp
-                    )
-
-                    availableFeatures.forEach { feat ->
+                CampusGroup {
+                    availableFeatures.forEachIndexed { index, feat ->
+                        if (index > 0) CampusGroupDivider()
                         val isSelected = currentQuickIds.contains(feat.id)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
                                 .clickable {
                                     val newIds = currentQuickIds.toMutableList()
                                     if (isSelected) {
@@ -115,21 +94,24 @@ fun HomeConfigScreen(
                                         }
                                     }
                                 }
-                                .padding(vertical = 6.dp, horizontal = 4.dp),
+                                .padding(vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
                                 Text(
                                     text = feat.title,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = MiuixTheme.colorScheme.onSurface
+                                    fontSize = 15.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = campusColors.textPrimary
                                 )
                                 Text(
                                     text = feat.description,
-                                    fontSize = 11.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    fontSize = 12.sp,
+                                    color = campusColors.textSecondary
                                 )
                             }
 
@@ -160,37 +142,22 @@ fun HomeConfigScreen(
             }
 
             // 2. 摘要区模块列表（开关与上下排序）
-            Card(
-                colors = CardDefaults.defaultColors(),
-                insideMargin = PaddingValues(16.dp),
-                modifier = Modifier.fillMaxWidth()
+            CampusSection(
+                title = "首页摘要模块与排序",
+                subtitle = "使用开关控制显隐，使用箭头调整上下顺序"
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "首页摘要模块与展示顺序",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-
-                    Text(
-                        text = "使用开关控制模块是否在首页展示，点击右侧上下箭头可调整它们在首页的纵向排列顺序。",
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                        lineHeight = 17.sp
-                    )
-
+                CampusGroup {
                     modules.forEachIndexed { index, mod ->
+                        if (index > 0) CampusGroupDivider()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MiuixTheme.colorScheme.surfaceContainer)
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
+                                modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
@@ -203,32 +170,36 @@ fun HomeConfigScreen(
 
                                 Text(
                                     text = mod.title,
-                                    fontSize = 14.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = if (mod.enabled) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (mod.enabled) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceSecondary
+                                    color = if (mod.enabled) campusColors.textPrimary else campusColors.textSecondary
                                 )
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 IconButton(
                                     onClick = { HomeLayoutConfigManager.moveModuleUp(index) },
-                                    enabled = index > 0
+                                    enabled = index > 0,
+                                    modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.KeyboardArrowUp,
                                         contentDescription = "上移",
-                                        tint = if (index > 0) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.3f)
+                                        tint = if (index > 0) campusColors.brand else campusColors.textSecondary.copy(alpha = 0.3f),
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
 
                                 IconButton(
                                     onClick = { HomeLayoutConfigManager.moveModuleDown(index) },
-                                    enabled = index < modules.size - 1
+                                    enabled = index < modules.size - 1,
+                                    modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.KeyboardArrowDown,
                                         contentDescription = "下移",
-                                        tint = if (index < modules.size - 1) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.3f)
+                                        tint = if (index < modules.size - 1) campusColors.brand else campusColors.textSecondary.copy(alpha = 0.3f),
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }
@@ -238,11 +209,7 @@ fun HomeConfigScreen(
             }
 
             // 3. 恢复默认操作
-            Card(
-                colors = CardDefaults.defaultColors(),
-                insideMargin = PaddingValues(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            CampusGroup {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -251,14 +218,14 @@ fun HomeConfigScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = "重置为默认布局",
-                            fontSize = 14.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onSurface
+                            color = campusColors.textPrimary
                         )
                         Text(
-                            text = "恢复初始的快捷栏选项与模块排序",
-                            fontSize = 11.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            text = "恢复初始快捷入口与默认模块排序",
+                            fontSize = 12.sp,
+                            color = campusColors.textSecondary
                         )
                     }
 
@@ -272,6 +239,8 @@ fun HomeConfigScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
