@@ -5,8 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
+import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,6 +31,10 @@ object TimeFormatter {
     }
 }
 
+/**
+ * 严格遵循真实数据边界的来源与客户端同步时间标示。
+ * 遵守 docs/07: "数据时间分别显示'最近同步'，只有真实提供学校更新时间才写'学校更新于'，客户端时间不冒充学校更新时间。"
+ */
 @Composable
 fun SafeDataTag(
     sourceName: String,
@@ -38,22 +42,23 @@ fun SafeDataTag(
     isStale: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val colors = CampusTheme.colors
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         val timeStr = TimeFormatter.formatTime(lastSuccessEpochMillis)
         val text = if (isStale) {
-            "来源：$sourceName · 上次更新于 $timeStr (旧缓存)"
+            "来源：$sourceName · 最近同步 $timeStr (旧缓存)"
         } else if (lastSuccessEpochMillis != null) {
-            "来源：$sourceName · 更新于 $timeStr"
+            "来源：$sourceName · 最近同步 $timeStr"
         } else {
             "来源：$sourceName"
         }
         Text(
             text = text,
             fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.onSurfaceSecondary
+            color = colors.textSecondary
         )
     }
 }
@@ -63,6 +68,7 @@ fun SafeDataTag(
     text: String,
     modifier: Modifier = Modifier
 ) {
+    val colors = CampusTheme.colors
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
@@ -70,8 +76,7 @@ fun SafeDataTag(
         Text(
             text = text,
             fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.onSurfaceSecondary
+            color = colors.textSecondary
         )
     }
 }
-
