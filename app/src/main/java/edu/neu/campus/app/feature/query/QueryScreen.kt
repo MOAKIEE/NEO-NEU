@@ -45,6 +45,7 @@ import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusRow
 import edu.neu.campus.ui.components.CampusSection
+import edu.neu.campus.ui.components.CampusSearchField
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.StaggeredAppear
 import edu.neu.campus.ui.components.tapScale
@@ -55,14 +56,11 @@ import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Alarm
 import top.yukonga.miuix.kmp.icon.extended.BankCards
-import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Notes
@@ -116,30 +114,10 @@ fun QueryScreen(
                 .fillMaxWidth()
                 .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs)
         ) {
-            TextField(
+            CampusSearchField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = "搜索功能，如成绩、考试、课表、网费",
-                useLabelAsPlaceholder = true,
-                leadingIcon = {
-                    Icon(
-                        imageVector = MiuixIcons.Regular.Search,
-                        contentDescription = "搜索",
-                        tint = colors.textTertiary
-                    )
-                },
-                trailingIcon = {
-                    if (isSearching) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(
-                                imageVector = MiuixIcons.Regular.Close,
-                                contentDescription = "清除",
-                                tint = colors.textSecondary
-                            )
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
+                placeholder = "搜索功能，如成绩、考试、课表、网费"
             )
         }
 

@@ -30,13 +30,9 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Favorites
-import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 
 enum class GradeSortOrder(val label: String) {
@@ -248,30 +244,10 @@ fun GradesScreen(
 
             // 3. 本地搜索输入框
             item {
-                TextField(
+                CampusSearchField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = "搜索课程名称",
-                    useLabelAsPlaceholder = true,
-                    leadingIcon = {
-                        Icon(
-                            imageVector = MiuixIcons.Regular.Search,
-                            contentDescription = "搜索",
-                            tint = colors.textTertiary
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotBlank()) {
-                            IconButton(onClick = { searchQuery = "" }) {
-                                Icon(
-                                    imageVector = MiuixIcons.Regular.Close,
-                                    contentDescription = "清除",
-                                    tint = colors.textSecondary
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
+                    placeholder = "搜索课程名称"
                 )
             }
 
