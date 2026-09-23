@@ -30,6 +30,10 @@ lifecycleScope.launch {
     campus.academic.refreshCampuses(term.id)
     campus.academic.refreshTimetable(term.id, null) // 学期视图，遍历所有返回校区
     val table = campus.academic.timetable(term.id, null).value
+    campus.portal.refreshBalance(BalanceKind.CAMPUS_CARD)
+    val card = campus.portal.balance(BalanceKind.CAMPUS_CARD).value
+    campus.portal.refreshMessages(page = 1, pageSize = 20)
+    val messages = campus.portal.messages(page = 1, pageSize = 20).value
     // 观察 Flow<QuerySnapshot<T>>；FAILED 时可能保留旧 data
 }
 ```
