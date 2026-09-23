@@ -236,7 +236,7 @@ fun TodayScreen(
                                 color = colors.textPrimary
                             )
                             Text(
-                                text = "会话已过期，重新登录以同步课表与数据",
+                                text = "登录已过期，请重新登录以获取最新课表",
                                 fontSize = 12.sp,
                                 color = colors.textSecondary
                             )
@@ -260,7 +260,7 @@ fun TodayScreen(
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "网络连接受阻，当前显示最后成功的本地缓存",
+                    text = "网络连接受阻，当前显示上次获取的信息",
                     fontSize = 12.sp,
                     color = colors.textSecondary
                 )

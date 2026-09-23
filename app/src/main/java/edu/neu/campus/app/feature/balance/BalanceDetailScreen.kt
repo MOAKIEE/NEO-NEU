@@ -99,7 +99,7 @@ fun BalanceDetailScreen(
         ) {
             // 离线/缓存更新提示条
             if (balanceSnapshot.isStale) {
-                SafeDataTag(text = "离线，显示上次同步的本地缓存数据")
+                SafeDataTag(text = "离线，显示上次获取的余额")
             }
 
             // 1. 主余额大卡片（轻色背景 + 资产强调色）
@@ -238,7 +238,7 @@ fun BalanceDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "本应用为本地原生只读查询工具，不存储任何支付密码，不执行资金扣划与第三方支付。",
+                            text = "本应用仅供查询余额，不保存支付密码，也不能在此充值或付款。",
                             fontSize = 12.sp,
                             color = campusColors.textSecondary,
                             lineHeight = 18.sp

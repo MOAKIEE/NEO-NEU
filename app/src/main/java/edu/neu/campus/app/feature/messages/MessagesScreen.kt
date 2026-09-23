@@ -111,7 +111,7 @@ fun MessagesScreen(
 
         // 规范要求的提示说明条
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-            SafeDataTag(text = "阅读仅记录在本机，不改变学校服务端状态")
+            SafeDataTag(text = "在此查看消息不会改变学校网站上的已读状态")
         }
 
         // 筛选标签行

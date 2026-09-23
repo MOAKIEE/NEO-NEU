@@ -117,17 +117,8 @@ fun SettingsScreen(
                             color = campusColors.textPrimary
                         )
 
-                        val scope = sessionState.accountScope
-                        val accountDisplay = if (scope != null && scope.length > 6) {
-                            "账号作用域: ${scope.take(4)}****${scope.takeLast(2)}"
-                        } else if (scope != null) {
-                            "账号作用域: $scope"
-                        } else {
-                            "未连接学校账号"
-                        }
-
                         Text(
-                            text = accountDisplay,
+                            text = if (sessionState.accountScope == null) "未登录学校账号" else "已登录学校账号",
                             fontSize = 13.sp,
                             color = campusColors.textSecondary
                         )
@@ -152,11 +143,11 @@ fun SettingsScreen(
             // 2. 账号与两域连接状态
             CampusSection(
                 title = "系统连接状态",
-                actionText = "复验会话",
+                actionText = "检查连接",
                 onActionClick = {
                     coroutineScope.launch {
                         CampusDataProvider.session.verify()
-                        Toast.makeText(context, "正在复验会话...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "正在检查连接...", Toast.LENGTH_SHORT).show()
                     }
                 }
             ) {
@@ -305,45 +296,12 @@ fun SettingsScreen(
             CampusSection(title = "数据与隐私") {
                 CampusGroup {
                     Text(
-                        text = "已连接的学期课表、最近一次查询的成绩及校园生活资产，均采用 Android Room 本地私有数据库缓存，离线时仍可随时查看。",
+                        text = "最近查看的课表、成绩和校园生活信息会保存在本机，网络不可用时仍可查看。",
                         fontSize = 12.sp,
                         color = campusColors.textSecondary,
                         lineHeight = 18.sp,
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
-
-                    CampusGroupDivider()
-
-                    // 演示数据模式开关
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Text(
-                                text = "演示数据模式",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = campusColors.textPrimary
-                            )
-                            Text(
-                                text = "切换至本地隔离的合成测试样本，带显眼警示横幅",
-                                fontSize = 12.sp,
-                                color = campusColors.textSecondary
-                            )
-                        }
-
-                        CampusSwitch(
-                            checked = CampusDataProvider.isDemoMode,
-                            onCheckedChange = { CampusDataProvider.isDemoMode = it }
-                        )
-                    }
 
                     CampusGroupDivider()
 
@@ -382,18 +340,13 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "版本：1.0.0 · 智慧东大自用查询客户端",
+                            text = "版本：1.0.0",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = campusColors.textPrimary
                         )
                         Text(
-                            text = "技术栈：Kotlin + Jetpack Compose + Miuix 0.9.4",
-                            fontSize = 12.sp,
-                            color = campusColors.textSecondary
-                        )
-                        Text(
-                            text = "纯原生架构渲染，不做 WebView 套壳；认证完全在学校官方登录页面完成，客户端不保存用户密码。",
+                            text = "登录通过学校官方页面完成，本应用不保存你的密码。",
                             fontSize = 12.sp,
                             color = campusColors.textSecondary,
                             lineHeight = 18.sp
@@ -447,7 +400,7 @@ fun SettingsScreen(
                         color = campusColors.textPrimary
                     )
                     Text(
-                        text = "退出登录将清除本机的学校会话状态与本地账号作用域。重新登录前，需要重新通过官方认证页面输入密码。",
+                        text = "退出后需要重新通过学校官方页面登录。",
                         fontSize = 13.sp,
                         color = campusColors.textPrimary,
                         lineHeight = 20.sp
@@ -505,7 +458,7 @@ fun SettingsScreen(
                         color = campusColors.textPrimary
                     )
                     Text(
-                        text = "这将清理本机本地存储的离线课表和历史成绩快照，不会影响学校服务端的任何数据。清理后需重新联网同步。",
+                        text = "这将清除本机保存的离线课表和历史成绩，不会影响学校网站上的数据。清理后需联网重新获取。",
                         fontSize = 13.sp,
                         color = campusColors.textPrimary,
                         lineHeight = 20.sp

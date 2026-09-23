@@ -124,7 +124,7 @@ fun MessageDetailScreen(
                             color = campusColors.textSecondary
                         )
                         Text(
-                            text = "本机状态：已查看",
+                            text = "已在本机查看",
                             fontSize = 11.sp,
                             color = campusColors.brand
                         )
@@ -173,7 +173,7 @@ fun MessageDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "本通知仅在本地安全呈现纯文本内容。如需查看附件、填报表单或在学校系统标记已读，请通过系统浏览器访问智慧东大官方门户。",
+                            text = "如需查看附件、填写表单或在学校网站标记已读，请前往智慧东大官方门户。",
                             fontSize = 12.sp,
                             color = campusColors.textSecondary,
                             lineHeight = 18.sp

@@ -1,8 +1,6 @@
 package edu.neu.campus.app
 
 import android.content.Context
-import edu.neu.campus.app.demo.DemoDataRepository
-import edu.neu.campus.app.demo.DemoModeManager
 import edu.neu.campus.contract.AcademicRepository
 import edu.neu.campus.contract.PortalRepository
 import edu.neu.campus.contract.SessionRepository
@@ -10,7 +8,6 @@ import edu.neu.campus.repository.CampusData
 
 object CampusDataProvider {
     private var realData: CampusData? = null
-    private val demoRepo = DemoDataRepository()
 
     fun init(context: Context) {
         if (realData == null) {
@@ -19,15 +16,11 @@ object CampusDataProvider {
     }
 
     val session: SessionRepository
-        get() = if (DemoModeManager.isDemoMode) demoRepo else realData!!.session
+        get() = realData!!.session
 
     val academic: AcademicRepository
-        get() = if (DemoModeManager.isDemoMode) demoRepo else realData!!.academic
+        get() = realData!!.academic
 
     val portal: PortalRepository
-        get() = if (DemoModeManager.isDemoMode) demoRepo else realData!!.portal
-
-    var isDemoMode: Boolean
-        get() = DemoModeManager.isDemoMode
-        set(value) { DemoModeManager.isDemoMode = value }
+        get() = realData!!.portal
 }

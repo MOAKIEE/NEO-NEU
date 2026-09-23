@@ -275,7 +275,7 @@ private fun SchemaChangedCard(context: Context) {
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
-                        text = "学校待办中心接口格式变动",
+                        text = "暂时无法查看待办事项",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = campusColors.textPrimary
@@ -283,14 +283,14 @@ private fun SchemaChangedCard(context: Context) {
                 }
 
                 Text(
-                    text = "学校智慧门户的待办事项数据返回格式近期发生升级变更。为保障学生个人数据解析准确性与账号安全，移动客户端已暂时挂起该接口的本地解析，未作盲目猜测。",
+                    text = "待办事项暂时无法在此显示。请前往学校官方门户查看和办理。",
                     fontSize = 13.sp,
                     color = campusColors.textPrimary,
                     lineHeight = 20.sp
                 )
 
                 Text(
-                    text = "请通过学校官方门户网站登录待办系统查看或处理审批事务。",
+                    text = "你可以在官方门户查看或处理审批事务。",
                     fontSize = 12.sp,
                     color = campusColors.textSecondary
                 )

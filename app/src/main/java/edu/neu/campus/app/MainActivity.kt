@@ -154,7 +154,7 @@ class MainActivity : ComponentActivity() {
                                         onBack = { AppNavigator.popBack() }
                                     )
                                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Text("页面：$dest", fontSize = 16.sp)
+                                        Text("此页面暂时无法打开", fontSize = 16.sp)
                                     }
                                 }
                             }

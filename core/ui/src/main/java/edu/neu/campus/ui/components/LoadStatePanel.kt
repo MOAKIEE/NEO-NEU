@@ -114,7 +114,7 @@ fun LoadStatePanel(
                     val subDesc = when (error.kind) {
                         QueryErrorKind.AUTH_REQUIRED -> "会话已过期，请在官方页面重新认证以同步数据"
                         QueryErrorKind.NETWORK -> "请检查校园网络或离线缓存，点击重试"
-                        QueryErrorKind.SCHEMA_CHANGED -> "学校接口数据结构暂未完全兼容，建议访问官方网页办理"
+                        QueryErrorKind.SCHEMA_CHANGED -> "请稍后再试，或前往学校官方网页查看"
                         QueryErrorKind.FORBIDDEN -> "该功能受教务系统权限限制，仅对特定学生开放"
                         else -> error.message.takeIf { it != mainTitle } ?: "请稍候重新同步"
                     }

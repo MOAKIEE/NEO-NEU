@@ -11,7 +11,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import edu.neu.campus.app.demo.DemoModeBanner
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
@@ -44,7 +43,6 @@ fun MainScreen(
                 .background(colors.background)
                 .statusBarsPadding()
         ) {
-            DemoModeBanner()
             subScreen(destination)
         }
     } else {
@@ -99,7 +97,6 @@ fun MainScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                DemoModeBanner()
                 Box(modifier = Modifier.weight(1f)) {
                     // 保留四个 Tab 的状态与滚动位置
                     androidx.compose.animation.AnimatedVisibility(

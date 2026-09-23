@@ -106,7 +106,7 @@ fun ServicesCatalogScreen(
         )
 
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-            SafeDataTag(text = "外部业务由系统浏览器打开，本客户端不设 WebView 嵌套")
+            SafeDataTag(text = "学校服务将在系统浏览器中打开")
         }
 
         LazyColumn(
