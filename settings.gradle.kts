@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "NEO NEU"
-include(":core:contract", ":data:session", ":data:network", ":data:database", ":data:repository", ":integration:academic", ":integration:portal", ":integration:auth-web", ":verification")
+include(":core:contract", ":data:session", ":data:network", ":data:database", ":data:repository", ":integration:academic", ":integration:portal", ":integration:auth-web", ":verification", ":core:ui", ":app")

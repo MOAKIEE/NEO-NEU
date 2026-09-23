@@ -1,4 +1,13 @@
 plugins {
     id("com.android.application") version "9.4.1" apply false
     id("com.android.library") version "9.4.1" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.2.10" apply false
+}
+
+subprojects {
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().configureEach {
+        compilerOptions {
+            freeCompilerArgs.add("-Xskip-metadata-version-check")
+        }
+    }
 }
