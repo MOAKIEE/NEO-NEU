@@ -41,6 +41,8 @@ fun CampusTopBar(
     modifier: Modifier = Modifier,
     subtitle: String = "",
     scrollBehavior: ScrollBehavior? = null,
+    // 父布局已应用系统栏边距时关闭，避免重复顶部留白。默认保留既有页面行为。
+    defaultWindowInsetsPadding: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null
 ) {
     val colors = CampusTheme.colors
@@ -53,6 +55,7 @@ fun CampusTopBar(
         largeTitleColor = colors.textPrimary,
         subtitle = subtitle,
         subtitleColor = colors.textSecondary,
+        defaultWindowInsetsPadding = defaultWindowInsetsPadding,
         navigationIcon = if (onBack != null) {
             {
                 IconButton(onClick = onBack) {

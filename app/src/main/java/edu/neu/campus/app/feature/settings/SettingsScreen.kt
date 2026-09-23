@@ -63,7 +63,12 @@ fun SettingsScreen(
         modifier = modifier.fillMaxSize().background(colors.background)
             .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
-        CampusTopBar(title = "我的", scrollBehavior = pageScrollBehavior)
+        // MainScreen 已应用 Scaffold 的系统栏 padding；此处不能重复添加窗口边距。
+        CampusTopBar(
+            title = "我的",
+            defaultWindowInsetsPadding = false,
+            scrollBehavior = pageScrollBehavior
+        )
         Column(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
                 .padding(horizontal = CampusSpacing.screenHorizontal)
