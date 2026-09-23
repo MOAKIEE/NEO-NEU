@@ -1,144 +1,46 @@
-# NEO NEU · Android 原生前端与系统集成交付文档
+# NEO NEU 前端实现说明
 
-日期：2026-09-23。
-本文件记录 **NEO NEU**（东北大学学生自用查询 App）原生前端与最终依赖装配的实现范围、构建验证方法、第 15 节扩展规则落实细节及未解决限制。
+更新日期：2026-09-23。本文记录已经集成到正式 `:app` 的原生界面和装配位置。页面目标以[UI 设计](../06-UI页面布局设计.md)为准；真实数据验证范围以[数据层交接](data.md)和[验证清单](../04-验证与发布清单.md)为准。
 
----
+## 工程配置
 
-## 1. 架构与技术选型
+| 项目 | 当前配置 |
+| --- | --- |
+| Android Gradle Plugin / Gradle Wrapper | 9.4.1 / 9.7.1 |
+| Kotlin Compose 插件 | 2.2.10 |
+| Miuix | 0.9.4，依赖位于 `core/ui/build.gradle.kts` |
+| SDK | `compileSdk 37`、`minSdk 24`、`targetSdk 36` |
+| applicationId | `edu.neu.campus.neoneu` |
+| JDK | 21 |
 
-- **开发语言与核心框架**：Kotlin 2.2.0 + Jetpack Compose (Compose BOM 2025.02.00)
-- **UI 设计规范与组件库**：Miuix 0.9.4 (`top.yukonga.miuix.kmp`)，保留深浅色与系统自适应主题
-- **构建环境与 SDK**：
-  - JDK 21
-  - Android Gradle Plugin (AGP) 8.9.0, Gradle Wrapper 9.7.1
-  - `compileSdk = 37`, `minSdk = 24`, `targetSdk = 35`
-  - Kotlin 编译器参数配置 `-Xskip-metadata-version-check`（完美解决 Miuix 0.9.4 的 Kotlin 2.4.0 编译元数据与项目 Kotlin 2.2.0 兼容问题）
-- **核心原则**：
-  - **核心业务全面原生渲染**：成绩、课表、考试、余额、消息、待办、校历全部使用 Compose 原生实现，严禁 WebView 套壳。
-  - **学校网页仅用于认证与外链原文**：用户登录由 `integration:auth-web` 的 `OfficialLogin.intent(context)` 引导至官方 CAS 页面完成，App 不触碰用户明文密码；消息/服务外链引导至系统浏览器打开。
-  - **契约冻结与数据隔离**：严格接入后端已冻结的 `core:contract`（`AcademicRepository`, `PortalRepository`, `SessionRepository`），不改动数据层内部逻辑，不猜接口。演示模式（`DemoDataRepository`）在物理和视觉上彻底隔离并带有鲜艳黄色横幅。
+根构建配置启用了 `-Xskip-metadata-version-check`，用于当前 Kotlin 与 Miuix 制品元数据的兼容。升级 Kotlin、Miuix 或 AGP 时应重新编译和运行测试，不能把该参数当成长期兼容保证。
 
----
+## 代码位置
 
-## 2. 模块划分与装配
+| 位置 | 职责 |
+| --- | --- |
+| `app/MainActivity.kt`、`app/MainScreen.kt`、`app/navigation/` | 正式入口、四项底部导航、详情页切换与官方登录启动 |
+| `app/CampusDataProvider.kt` | 真实 `CampusData` 与显式演示模式的数据源选择 |
+| `app/feature/` | 今日、课表、成绩、考试、余额、消息、待办、作息与校历、查询、服务和设置页面 |
+| `app/registry/FeatureRegistry.kt` | 查询功能标识、分类、搜索别名与入口状态 |
+| `app/config/HomeLayoutConfig.kt` | 首页快捷入口、摘要显示与顺序；使用本机 `SharedPreferences` |
+| `app/demo/DemoDataRepository.kt` | 虚构样本与演示模式提示，不作为接口验证 |
+| `core/ui/` | Miuix 主题、通用状态组件、课表网格和课程详情抽屉 |
 
-| 模块 | 职责与技术实现 | 核心依赖 |
-| --- | --- | --- |
-| `:app` | 主工程入口、四大 Tab 导航脚手架、所有业务 Screen、布局配置与扩展注册 | `:core:contract`, `:core:ui`, `:data:repository`, `:integration:auth-web`, Miuix |
-| `:core:ui` | 全局主题控制器（`ThemeManager`）、自定义课表网格（`TimetableGrid`）、课程详情原生抽屉（`CourseDetailBottomSheet`）、数据安全标签（`SafeDataTag`）、统一加载与重试状态面板（`LoadStatePanel`）、卡片容器（`QueryCard`） | Jetpack Compose, Miuix 0.9.4 |
-| `:core:contract` | 冻结的数据契约模型（`Timetable`, `Grade`, `Exam`, `Balance`, `CampusMessage`, `CampusTask`）、仓储接口与状态流 | Kotlin Coroutines Flow |
-| `:data:repository` | Room 本地缓存持久化与数据同步调度，提供单例 `CampusData.get(context)` | Room, Network, Session |
-| `:integration:auth-web` | 官方 Web 认证 Activity 入口 (`OfficialLogin`) | Android WebView |
+数据查询经 `CampusDataProvider.academic`、`.portal`、`.session` 使用 `core/contract` 契约；正式页面不应自行拼学校 URL、处理 Cookie 或复制接口 DTO。`OfficialLogin.intent(this)` 仅启动官方认证页；返回后 `session.verify()` 复验会话。
 
----
+## 页面范围
 
-## 3. 构建与验证指令
+四个主入口是**今日、课表、查询、我的**。详情入口在 `MainActivity` 中按 `AppDestination` 路由；主要页面已有原生 Compose 实现。首页快捷项和摘要模块由本机配置管理；余额隐私、消息本机阅读状态和主题偏好分别由对应管理器保存到本机。
 
-在 Windows 终端中运行以下命令，可直接完成全模块测试与正式 Debug APK 打包：
+演示模式使用 `DemoDataRepository`，并在主页面与详情页顶部显示提示。正常模式从真实 Repository 读取，查询失败不会自动切换为演示样本。非空考试、非空待办、多校区和实践课程等场景仍须真实数据复验，不能只凭页面代码或演示样本宣布完成。
+
+## 构建与继续验证
 
 ```powershell
-# 1. 运行所有模块的单元测试
-.\gradlew.bat testDebugUnitTest
-
-# 2. 构建正式 Debug APK
-.\gradlew.bat :app:assembleDebug
-
-# 3. 输出 APK 路径
-# app/build/outputs/apk/debug/app-debug.apk
+.\gradlew.bat testDebugUnitTest :app:assembleDebug
 ```
 
----
+Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。截至本次整理，上述命令通过；正式 App 的逐页真机、release 性能及不同 Android 版本验收尚未记录，后续按[验证与发布清单](../04-验证与发布清单.md)补齐。
 
-## 4. 页面与功能实现矩阵
-
-严格对照 `docs/06-UI页面布局设计.md` 逐页落实：
-
-### 4.1 首页（`TodayScreen`）
-- **视觉焦点**：顶部首屏突出“下一节课”核心卡片，动态识别【正在上课】、【下一节课】、【今日课程已全部结束】、【今日无课】及【多校区/课程冲突】等五种状态。
-- **右上角消息**：展示消息入口与未读小红点，点击直达消息中心。
-- **快捷查询栏**：前 3 项由用户自选配置（默认：成绩、考试、待办），第 4 项固定为“全部”，点击直达“查询”主页。
-- **可配置摘要区**：按用户偏好展示【今天的课程】、【校园生活（余额）】、【最近考试】、【待办事项】，支持在设置中排序或隐藏。
-
-### 4.2 课表（`TimetableScreen`）
-- **学期与周次**：顶部学期切换，周次横向滑动与“回本周”抽屉，支持整学期视图（1-25 周）。
-- **原生网格课表（`TimetableGrid`）**：
-  - 节次纵向滚动（1-12 节），星期横向平铺（周一至周日）。
-  - 当天高亮竖栏标记；课程多校区与实验标签区分展示；重叠冲突课折叠展示并标有红点。
-- **课程详情抽屉（`CourseDetailBottomSheet`）**：
-  - 底部滑出，展示课程全称、起止时间与节次、校区楼宇教室（支持一键复制）、授课教师、课程性质。
-  - “其他上课安排”列出该课程在其他周次的安排。
-- **未排课与实践课**：网格下方独立抽屉入口，展示未分配具体时间节次的实践或特殊课程。
-
-### 4.3 成绩查询（`GradesScreen` & `GradeDetailScreen`）
-- **官方 GPA 统计卡**：大字醒目展示官方总平均学分绩点，注明“全学程 / 学校统计口径”及刷新时间。
-- **筛选与排序**：学期下拉筛选（支持全部学期与各历史学期）；支持按默认、学分降序、课程名称排序；支持当前学期课程名称实时过滤。
-- **成绩详情页（`GradeDetailScreen`）**：展示课程编号、学分、考核性质、官方课程绩点；若后端返回组成项（`GradeComponent`），按表格形式原生展示平时分、期末分等占比与得分。
-
-### 4.4 考试安排（`ExamsScreen` & `ExamDetailScreen`）
-- **分段切换**：【已安排考试】与【未安排考试】双分段。
-- **日期分组展示**：已安排考试按考试日期聚合卡片，展示起止时间、课程名称、考场校区与教室、座位号。未开始考试优先，已结束考试折叠在底部。
-- **考试详情（`ExamDetailScreen`）**：展示完整考试信息、免责申明与教务处来源说明。
-
-### 4.5 校园生活（`BalanceDetailScreen`）
-- **校园卡与网费**：统一架构但独立入口与独立卡片，绝不混淆为单一资产。
-- **主余额大卡**：大字展示余额与单位，支持眼睛图标一键切换显隐（全局持久化联动）；显示更新时间与来源服务。
-- **安全指引**：明确说明本 App 仅供只读查询，无支付权限；提供各校区圈存机位置与官方空中充值途径说明。
-
-### 4.6 消息中心（`MessagesScreen` & `MessageDetailScreen`）
-- **筛选**：来源筛选（全部 / 智慧门户 / 教务系统）与状态筛选（全部 / 学校未读 / 学校已读）。
-- **原生纯文本正文**：严格按纯文本换行渲染，支持文本选择复制；标明“阅读仅记录在本机，不改变学校服务端状态”。
-- **外部链接**：底部提供“在浏览器查看官方原文”与一键复制门户链接。
-
-### 4.7 待办与申请（`TasksScreen`）
-- **分段切换**：【待办事项】 / 【已办事项】 / 【我的申请】。
-- **`SCHEMA_CHANGED` 保护机制**：根据后端交接说明，当学校门户非空待办返回结构升级变更时，前端自动呈现友好告警卡片，详细说明解析已安全挂起，并提供直接在系统浏览器打开官方门户的按钮，绝不误报为空或崩溃。
-
-### 4.8 作息与校历（`ScheduleScreen`）
-- **作息时间表**：展示浑南/南湖校区标准节次作息时间表（1-12 节），结合系统当前时间高亮进行中的节次。
-- **学期校历**：展示当前教学周进度条及开学、选退课、期中检查、考试周等关键教学周节点。
-
-### 4.9 查询主页与统一搜索（`QueryScreen`）
-- **统一搜索框**：仅搜索功能名称及别名（如 "GPA", "绩点", "饭卡", "考场" 等），实时单列展示结果，支持一键清空。
-- **分类卡片**：双列卡片展示学习、校园生活、消息事务。
-- **学校服务目录（`ServicesCatalogScreen`）**：列出研究生管理、自服务宽带、图书馆、体测等校级服务，带“官方网页”标签，提供在系统浏览器打开指引。
-
-### 4.10 “我的”与设置（`SettingsScreen` & `HomeConfigScreen`）
-- **身份卡**：头像、学生身份、“账号作用域”脱敏展示。
-- **连接状态**：门户与教务双域状态（已连接 / 需登录 / 连接过期），支持一键重新登录与会话复验。
-- **外观与偏好**：跟随系统 / 浅色 / 深色主题即时切换；余额默认隐私隐藏开关。
-- **首页可配置管理（`HomeConfigScreen`）**：落实第 15 节扩展规则，自定义快捷查询栏 3 项自选，调整首页摘要模块开关与上下移动排序。
-- **数据隐私与退出**：Room 离线缓存概览、演示模式切换、清除缓存、退出当前账号二次确认弹窗。
-
----
-
-## 5. 第 15 节扩展规则落实指南
-
-为保障后续新增功能（如校车、电费、空教室、图书馆借阅）的平滑演进：
-1. **稳定四项底部导航**：保持【今日】、【课表】、【查询】、【我的】四大 Tab 结构绝对稳定，新功能不新增底部栏项。
-2. **稳定功能注册表（`FeatureRegistry`）**：
-   - 所有功能在 `FeatureRegistry` 中声明唯一常量 ID（如 `ID_LIBRARY`）、标题、分类（`FeatureCategory`）、搜索别名列表（`searchAliases`）及接入状态（`FeatureStatus`）。
-   - 注册后，该功能自动在【查询主页】双列卡片中呈现，并在【统一搜索】中支持拼音、别名检索。
-   - 注册后，该功能自动出现在【首页布局配置】的快捷按钮候选池中，供学生勾选置入首页第一屏。
-3. **首页摘要区动态插拔**：
-   - 摘要模块统一实现为 `QueryCard` 独立组件。
-   - 在 `HomeLayoutConfigManager` 注册对应 `MODULE_ID`，即可获得启用/隐藏及上移/下移排序能力，且配置持久化保存在本地 SharedPreferences。
-
----
-
-## 6. 演示模式与真实模式隔离机制
-
-- **真实数据模式（默认）**：
-  - 数据源直连 `CampusData.get(context)`，通过 Room 数据库缓存与网络拦截器交互。
-  - 刷新失败保留旧缓存并标记 `SafeDataTag`（“离线，显示上次数据”）；空数据如实呈现空状态。
-- **演示数据模式（`DemoDataRepository`）**：
-  - 仅用于无网络演示、截屏展示及极端异常状态验收（如多校区跨校区课表、课程冲突、满分 GPA、多组成项成绩等）。
-  - 开启后，在 `TodayScreen` 及各级界面顶部展示显眼的明黄色警示横幅：`⚠️ 当前处于演示实现模式，展示数据均为本地模拟样本`，杜绝用户混淆。
-
----
-
-## 7. 实测限制与后续建议
-
-1. **会话有效期与双域复验**：学校门户会话与教务会话过期时间不完全一致。若教务提示 `AUTH_REQUIRED`，可在“我的”页面直接点击“登录学校官方账号”重新认证，无需清除本地课表历史缓存。
-2. **待办中心接口升级**：因官方非空待办接口变更，客户端已安全接入 `SCHEMA_CHANGED` 拦截并引导至浏览器；后续后端样本补全更新解析模型后，前端 `TasksScreen` 可无缝展示非空任务流水。
-3. **API 24 兼容性**：项目已配置 `minSdk = 24`，所有 Compose API 与 Miuix 组件均经兼容性校验；建议后续在真机 Android 7.0 设备上进行一次字体渲染缩放巡检。
+新增查询入口时，先在 `FeatureRegistry` 增加稳定 ID、分类和搜索别名，再接到 `AppDestination` 与对应页面。需要首页快捷入口时加入配置候选；需要首页摘要时在 `HomeLayoutConfigManager` 注册模块，新增摘要默认关闭。数据层新增字段或状态需同步更新 `core/contract`、适配实现和使用它的页面。

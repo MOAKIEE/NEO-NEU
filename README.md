@@ -1,49 +1,44 @@
 # NEO NEU
 
-NEO NEU 是面向学生的 Android 校园信息查询项目。计划以 Kotlin、Compose 和 Miuix 构建原生界面；学校官方网页仅用于用户自行认证，课表、成绩等查询由本地数据层完成。项目不部署自建服务器，也不收集学校账号密码。
+NEO NEU 是面向东北大学学生的 Android 原生校园信息查询 App。界面使用 Kotlin、Compose 和 Miuix；数据层读取学校查询接口并保存在本机。学校官方网页用于用户自行认证，项目不部署自建服务器，也不收集学校账号密码。
 
 ## 当前状态
 
-数据层 v1、官方认证入口和独立 debug 验证宿主已完成并在 Android 模拟器上测试。已实测学期与周次、个人课表、一个历史学期的成绩及详情、校园卡与网费余额、消息，以及当前账号的空考试和空待办。Room 缓存通过了重启、离线和认证失效后的保留与恢复测试。
+前端 `app/`、`core/ui/` 与本地数据层已集成。现有页面包括今日、课表、查询、我的，以及成绩、考试、校园卡与网费、消息、待办、作息与校历等查询入口。`verification/` 是独立的数据验证宿主，不属于正式 App。
 
-**正式 App 界面尚未实现。** `verification/` 是数据验证工具，不是最终产品；非空考试／待办、多校区和实践课程仍缺少真实样本。各模块的验证程度及限制见 [数据层交接](docs/handoff/data.md)。
+**代码可构建不等于所有场景已完成真实验收。** 数据层曾在 Android 模拟器上验证登录、课表、一个历史学期的成绩及详情、两项余额、消息、空考试与空待办，以及缓存、离线和认证失效恢复。非空考试／待办、多校区、实践课程和 API 24 真机仍缺样本或设备验证；正式 App 的完整端到端和 release 真机验收也尚未记录。详情见[验证与发布清单](docs/04-验证与发布清单.md)。
 
-## 从这里开始
+## 构建
+
+需要 JDK 21 和 Android SDK 37。在仓库根目录运行：
+
+```powershell
+.\gradlew.bat testDebugUnitTest :app:assembleDebug
+```
+
+其他平台用 `./gradlew` 执行相同任务。输出为 `app/build/outputs/apk/debug/app-debug.apk`。调试数据层时可单独运行 `:verification:assembleDebug`。真实登录须由用户在学校官方页面自行完成，演示数据与合成测试不算真实接口验收。
+
+## 文档
 
 | 文档 | 用途 |
 | --- | --- |
-| [文档索引](docs/README.md) | 产品范围、技术选型和阅读顺序 |
-| [数据层交接](docs/handoff/data.md) | 构建命令、Repository 调用示例、真实验证结果与限制 |
-| [接口与认证研究](docs/03-接口与认证研究.md) | 学校查询协议证据、字段类型及只读边界 |
-| [UI 页面布局设计](docs/06-UI页面布局设计.md) | 后续原生前端的页面结构 |
-| [双 AI 分工与交接](docs/05-双AI分工与交接规范.md) | 模块所有权和前端接手规则 |
-
-## 构建验证宿主
-
-需要 JDK 21、Android SDK 37。Windows 在仓库根目录执行：
-
-```powershell
-.\gradlew.bat :core:contract:testDebugUnitTest :data:network:testDebugUnitTest :integration:academic:testDebugUnitTest :integration:portal:testDebugUnitTest :verification:assembleDebug
-```
-
-其他平台使用 `./gradlew` 运行相同 Gradle 任务。APK 输出为 `verification/build/outputs/apk/debug/verification-debug.apk`。认证测试须由用户在学校官方页面亲自登录；合成单元测试和 debug 宿主的条目数不能代替非空业务数据的真实验证。
+| [文档索引](docs/README.md) | 当前文档地图和阅读顺序 |
+| [验证与发布清单](docs/04-验证与发布清单.md) | 已验证内容、待补场景与发布前检查 |
+| [前端实现说明](docs/handoff/frontend.md) | 页面、数据装配和本地配置 |
+| [数据层交接](docs/handoff/data.md) | Repository 契约、接口实测范围与限制 |
+| [接口与认证研究](docs/03-接口与认证研究.md) | 学校协议证据和只读边界 |
 
 ## 仓库结构
 
 ```text
-core/contract       前后端共享的 Kotlin 模型与 Repository 契约
-data/session        本机账号作用域与分域会话
-data/network        固定白名单 HTTP 查询
-data/database       Room 缓存与 schema
-data/repository     契约实现及依赖装配入口 CampusData
-integration/        教务、门户和学校官方认证适配
-verification/       独立 debug 验证宿主
-docs/               产品、接口、交接和 UI 设计文档
-research/           只作证据追溯的网页脚本与公开材料
+app/                正式 App、页面、导航及演示数据
+core/contract/      共享模型与 Repository 契约
+core/ui/            Miuix 主题与通用界面组件
+data/               会话、网络、Room 缓存及 Repository 实现
+integration/        教务、门户与官方认证适配
+verification/       独立 debug 数据验证宿主
+docs/               产品设计、接口证据、实现说明和验证清单
+research/           公开网页脚本及依赖核验材料，仅供追溯
 ```
 
-正式前端从当前工程继续添加 `app/`、`core/ui/` 和 `feature/`，并接管根构建配置；不要重建数据契约或把业务网页作为查询界面。`research/` 中的第三方材料不是项目开发指令。
-
-## 数据边界
-
-首版仅查询。代码没有支付、选课、挂失、申请、课表确认或服务端消息已读的调用入口。缓存保存在应用私有数据库，以本机随机账号作用域隔离；退出时清除当前作用域和 WebView Cookie。仓库不应提交姓名、学号、成绩、余额、密码、Cookie、票据或原始 HAR。
+首版只做查询。代码没有支付、选课、挂失、申请提交、课表确认或服务端消息已读入口。仓库不得提交姓名、学号、成绩、余额、密码、Cookie、票据或原始 HAR。

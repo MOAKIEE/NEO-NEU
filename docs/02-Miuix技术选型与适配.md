@@ -17,24 +17,22 @@
 | 发布版本 | 0.9.4 | 锁定具体版本，不使用 `+` |
 | 核心 AAR minSdk | 24 | 不再沿用旧 APK 的 minSdk 21 |
 | 核心 AAR minCompileSdk | 37 | 编译 SDK 不能低于 37；不代表只能运行在 API 37 |
-| Kotlin 依赖 | POM 指向 2.4.20 | 先采用与上游一致的工具链验证 |
-| Compose Foundation | POM 指向 1.12.0 | 不随意覆盖成旧版本 |
-| 上游 AGP / Gradle | 9.4.1 / 9.7.1 | 是上游构建配置，不等于已验证的本项目配置 |
-| 上游 JDK | 21 | 工程优先以 JDK 21 配置 |
+| Kotlin 依赖 | POM 指向 2.4.20 | 本项目当前 Kotlin Compose 插件为 2.2.10，并通过兼容参数构建；升级时重新验证 |
+| Compose Foundation | POM 指向 1.12.0 | 以实际 Gradle 解析结果为准，不由研究表推断运行时版本 |
+| 上游 AGP / Gradle | 9.4.1 / 9.7.1 | 本项目当前也使用 9.4.1 / 9.7.1 |
+| 上游 JDK | 21 | 本项目以 JDK 21 构建 |
 | 模糊模块 | 源码明确 minSdk 33 | 首版不直接依赖，以保留 API 24 构建下限 |
 | API 稳定性 | 官方标为实验性 | 包一层项目组件，集中处理升级 |
 
-核心、core、squircle、shader、preference 的 0.9.4 AAR 都核验了 minSdk 24 与 minCompileSdk 37。2026-09-23 已建立数据阶段工程并以 compileSdk 37、minSdk 24 构建验证宿主；尚未把 Miuix 依赖加入正式 UI，也未验证 Miuix 页面构建。
+核心、core、squircle、shader、preference 的 0.9.4 AAR 都核验了 minSdk 24 与 minCompileSdk 37。当前正式 `:app` 已通过 `:core:ui` 接入 Miuix 0.9.4，使用 compileSdk 37、minSdk 24、targetSdk 36；Debug APK 已构建。真机适配与 release 性能仍需按[验证清单](04-验证与发布清单.md)检查。
 
-## 依赖起点
+## 当前依赖
 
 ```kotlin
-// Android Compose 工程；示意，需结合完整 Gradle 配置编译验证。
 dependencies {
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
     implementation("top.yukonga.miuix.kmp:miuix-preference-android:0.9.4")
-    // 需要扩展图标时再添加：
-    // implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4")
 }
 ```
 
@@ -46,7 +44,7 @@ dependencies {
 
 | 产品位置 | Miuix 组件或机制 | 项目补充 |
 | --- | --- | --- |
-| 全局主题 | MiuixTheme、ThemeController | DataStore 保存系统／浅色／深色偏好 |
+| 全局主题 | MiuixTheme、ThemeController | `SharedPreferences` 保存系统／浅色／深色偏好 |
 | 主框架 | Scaffold、TopAppBar | 安全区、返回栈、刷新状态 |
 | 四项导航 | NavigationBar、NavigationBarItem | 保留每页滚动位置，始终显示文字 |
 | 今日卡片 | Card、Text、Button | 业务加载和过期提示 |
@@ -59,32 +57,32 @@ dependencies {
 
 Miuix `NavigationBar` 支持 2—5 项，四项导航符合组件能力。`OverlayBottomSheet` 等 Overlay 组件依赖 Miuix `Scaffold` 提供的 PopupHost；仅使用同名 Material Scaffold 不能假设可替代。
 
-建议在 `core/ui` 中封装 `CampusScaffold`、`QueryCard`、`LoadStatePanel`、`TermSelector`。业务页面不直接散布实验性 API；依赖升级只在单独变更中进行。
+当前 `core/ui` 已提供主题、`QueryCard`、`LoadStatePanel`、课表网格与课程详情抽屉。升级实验性 Miuix API 时应检查使用它的页面。
 
 ## 客户端架构
 
 ```text
-app                    导航、依赖装配、启动
+app                    导航、依赖装配、启动和 feature/* 页面
 core/ui                Miuix 封装、主题、状态组件
 core/contract          双方共享模型与 Repository 接口
 data/session           分域会话、认证恢复、退出
 data/network           请求白名单、错误解释、脱敏
 data/database          Room 缓存、来源及账号隔离
 data/repository        统一契约的真实实现
-feature/today          今日聚合
-feature/timetable      课表与节次
-feature/grades         成绩与官方统计
-feature/exams          考试
-feature/balances       校园卡与网费
-feature/messages       门户消息与教务消息
-feature/tasks          待办摘要
-feature/settings       本地设置
+app/feature/today      今日聚合
+app/feature/timetable  课表与节次
+app/feature/grades     成绩与官方统计
+app/feature/exams      考试
+app/feature/balance    校园卡与网费
+app/feature/messages   消息
+app/feature/tasks      待办摘要
+app/feature/settings   本地设置
 integration/portal     门户契约适配
 integration/academic   教务契约适配
 integration/auth-web   官方认证与会话衔接；不承载业务查询页面
 ```
 
-采用 ViewModel + StateFlow 管理界面，Repository 负责缓存、合并与刷新，网络客户端负责实际传输。OkHttp、Room、DataStore 为建议选型，具体版本在工程初始化时核验并锁定。不要把浏览器页面 DOM、服务器 DTO 或 Cookie 直接暴露给 UI。
+当前页面通过 Compose 状态和 `Flow<QuerySnapshot<T>>` 观察数据；Repository 负责缓存与刷新，网络层负责实际传输。首页布局与部分显示偏好保存在本机 `SharedPreferences`。不要把浏览器 DOM、服务器 DTO 或 Cookie 暴露给 UI。
 
 ## 适配验收
 
