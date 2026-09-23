@@ -57,3 +57,21 @@ fun SafeDataTag(
         )
     }
 }
+
+@Composable
+fun SafeDataTag(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onSurfaceSecondary
+        )
+    }
+}
+

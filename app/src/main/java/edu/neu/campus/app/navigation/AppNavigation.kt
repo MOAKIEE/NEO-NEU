@@ -12,14 +12,19 @@ enum class MainTab(val title: String) {
 
 sealed interface AppDestination {
     data object Main : AppDestination
+    data object Grades : AppDestination
     data class GradeDetail(val termId: String, val sourceId: String) : AppDestination
+    data object Exams : AppDestination
     data class ExamDetail(val courseName: String) : AppDestination
     data class BalanceDetail(val kind: BalanceKind) : AppDestination
+    data object Messages : AppDestination
     data class MessageDetail(val messageId: String) : AppDestination
+    data object Tasks : AppDestination
     data class TaskDetail(val taskId: String) : AppDestination
+    data object Schedule : AppDestination
+    data object BellSchedule : AppDestination
     data object ServicesCatalog : AppDestination
     data object HomeSettings : AppDestination
-    data object BellSchedule : AppDestination
 }
 
 object AppNavigator {

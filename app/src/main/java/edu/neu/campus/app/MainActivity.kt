@@ -39,6 +39,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         CampusDataProvider.init(this)
         HomeLayoutConfigManager.init(this)
+        edu.neu.campus.app.feature.balance.BalancePrivacyManager.init(this)
+        edu.neu.campus.app.feature.messages.MessagesManager.init(this)
 
         // 启动时复验会话
         lifecycleScope.launch {
@@ -58,6 +60,12 @@ class MainActivity : ComponentActivity() {
                     settingsScreen = { PlaceholderPage("我的") },
                     subScreen = { dest ->
                         when (dest) {
+                            is AppDestination.Grades -> {
+                                GradesScreen(
+                                    onBack = { AppNavigator.popBack() },
+                                    onLoginClick = { launchLogin() }
+                                )
+                            }
                             is AppDestination.GradeDetail -> {
                                 if (dest.sourceId.isBlank()) {
                                     GradesScreen(
@@ -72,6 +80,12 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+                            is AppDestination.Exams -> {
+                                ExamsScreen(
+                                    onBack = { AppNavigator.popBack() },
+                                    onLoginClick = { launchLogin() }
+                                )
+                            }
                             is AppDestination.ExamDetail -> {
                                 if (dest.courseName.isBlank()) {
                                     ExamsScreen(
@@ -84,6 +98,39 @@ class MainActivity : ComponentActivity() {
                                         onBack = { AppNavigator.popBack() }
                                     )
                                 }
+                            }
+                            is AppDestination.BalanceDetail -> {
+                                edu.neu.campus.app.feature.balance.BalanceDetailScreen(
+                                    kind = dest.kind,
+                                    onBack = { AppNavigator.popBack() }
+                                )
+                            }
+                            is AppDestination.Messages -> {
+                                edu.neu.campus.app.feature.messages.MessagesScreen(
+                                    onBack = { AppNavigator.popBack() }
+                                )
+                            }
+                            is AppDestination.MessageDetail -> {
+                                if (dest.messageId.isBlank()) {
+                                    edu.neu.campus.app.feature.messages.MessagesScreen(
+                                        onBack = { AppNavigator.popBack() }
+                                    )
+                                } else {
+                                    edu.neu.campus.app.feature.messages.MessageDetailScreen(
+                                        messageId = dest.messageId,
+                                        onBack = { AppNavigator.popBack() }
+                                    )
+                                }
+                            }
+                            is AppDestination.Tasks, is AppDestination.TaskDetail -> {
+                                edu.neu.campus.app.feature.tasks.TasksScreen(
+                                    onBack = { AppNavigator.popBack() }
+                                )
+                            }
+                            is AppDestination.Schedule, is AppDestination.BellSchedule -> {
+                                edu.neu.campus.app.feature.schedule.ScheduleScreen(
+                                    onBack = { AppNavigator.popBack() }
+                                )
                             }
                             else -> {
                                 Column(modifier = Modifier.fillMaxSize()) {

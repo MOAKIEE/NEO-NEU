@@ -128,7 +128,7 @@ fun TodayScreen(
     }
 
     var inspectingCourse by remember { mutableStateOf<CourseOccurrence?>(null) }
-    var hideBalance by remember { mutableStateOf(HomeLayoutConfigManager.hideBalanceByDefault) }
+    val hideBalance = edu.neu.campus.app.feature.balance.BalancePrivacyManager.isBalanceMasked
 
     Column(
         modifier = Modifier
@@ -162,7 +162,7 @@ fun TodayScreen(
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .clickable { AppNavigator.navigateTo(AppDestination.MessageDetail("")) }
+                    .clickable { AppNavigator.navigateTo(AppDestination.Messages) }
                     .padding(8.dp)
             ) {
                 Icon(
@@ -251,12 +251,12 @@ fun TodayScreen(
                         modifier = Modifier.weight(1f),
                         onClick = {
                             when (feat.id) {
-                                FeatureRegistry.ID_GRADES -> AppNavigator.navigateTo(AppDestination.GradeDetail("", ""))
-                                FeatureRegistry.ID_EXAMS -> AppNavigator.navigateTo(AppDestination.ExamDetail(""))
+                                FeatureRegistry.ID_GRADES -> AppNavigator.navigateTo(AppDestination.Grades)
+                                FeatureRegistry.ID_EXAMS -> AppNavigator.navigateTo(AppDestination.Exams)
                                 FeatureRegistry.ID_CAMPUS_CARD -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD))
                                 FeatureRegistry.ID_NETWORK -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK))
-                                FeatureRegistry.ID_MESSAGES -> AppNavigator.navigateTo(AppDestination.MessageDetail(""))
-                                FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.TaskDetail(""))
+                                FeatureRegistry.ID_MESSAGES -> AppNavigator.navigateTo(AppDestination.Messages)
+                                FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.Tasks)
                                 else -> AppNavigator.navigateToTab(MainTab.QUERY)
                             }
                         }
@@ -356,7 +356,7 @@ fun TodayScreen(
                                 text = if (hideBalance) "显示余额" else "隐藏余额",
                                 fontSize = 12.sp,
                                 color = MiuixTheme.colorScheme.primary,
-                                modifier = Modifier.clickable { hideBalance = !hideBalance }
+                                modifier = Modifier.clickable { edu.neu.campus.app.feature.balance.BalancePrivacyManager.toggleMasked() }
                             )
                         }
 
@@ -443,7 +443,7 @@ fun TodayScreen(
                         QueryCard(
                             title = "待办事项 (${tasksSnapshot.data?.total ?: tasks.size})",
                             actionText = "查看列表 ›",
-                            onActionClick = { AppNavigator.navigateTo(AppDestination.TaskDetail("")) }
+                            onActionClick = { AppNavigator.navigateTo(AppDestination.Tasks) }
                         ) {
                             tasks.take(2).forEach { t ->
                                 Text(
