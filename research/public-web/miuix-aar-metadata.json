@@ -1,0 +1,72 @@
+[
+  [
+    "miuix-ui-android",
+    200,
+    [
+      [
+        "AndroidManifest.xml",
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    package=\"top.yukonga.miuix.kmp.ui\" >\n\n    <uses-sdk android:minSdkVersion=\"24\" />\n\n</manifest>"
+      ],
+      [
+        "META-INF/com/android/build/gradle/aar-metadata.properties",
+        "aarFormatVersion=1.0\naarMetadataVersion=1.0\nminCompileSdk=37\nminCompileMinorSdk=0\nminCompileSdkExtension=0\nminAndroidGradlePluginVersion=1.0.0\ncoreLibraryDesugaringEnabled=false\n"
+      ]
+    ]
+  ],
+  [
+    "miuix-core-android",
+    200,
+    [
+      [
+        "AndroidManifest.xml",
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    package=\"top.yukonga.miuix.kmp.core\" >\n\n    <uses-sdk android:minSdkVersion=\"24\" />\n\n</manifest>"
+      ],
+      [
+        "META-INF/com/android/build/gradle/aar-metadata.properties",
+        "aarFormatVersion=1.0\naarMetadataVersion=1.0\nminCompileSdk=37\nminCompileMinorSdk=0\nminCompileSdkExtension=0\nminAndroidGradlePluginVersion=1.0.0\ncoreLibraryDesugaringEnabled=false\n"
+      ]
+    ]
+  ],
+  [
+    "miuix-squircle-android",
+    200,
+    [
+      [
+        "AndroidManifest.xml",
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    package=\"top.yukonga.miuix.kmp.squircle\" >\n\n    <uses-sdk android:minSdkVersion=\"24\" />\n\n</manifest>"
+      ],
+      [
+        "META-INF/com/android/build/gradle/aar-metadata.properties",
+        "aarFormatVersion=1.0\naarMetadataVersion=1.0\nminCompileSdk=37\nminCompileMinorSdk=0\nminCompileSdkExtension=0\nminAndroidGradlePluginVersion=1.0.0\ncoreLibraryDesugaringEnabled=false\n"
+      ]
+    ]
+  ],
+  [
+    "miuix-shader-android",
+    200,
+    [
+      [
+        "AndroidManifest.xml",
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    package=\"top.yukonga.miuix.kmp.shader\" >\n\n    <uses-sdk android:minSdkVersion=\"24\" />\n\n</manifest>"
+      ],
+      [
+        "META-INF/com/android/build/gradle/aar-metadata.properties",
+        "aarFormatVersion=1.0\naarMetadataVersion=1.0\nminCompileSdk=37\nminCompileMinorSdk=0\nminCompileSdkExtension=0\nminAndroidGradlePluginVersion=1.0.0\ncoreLibraryDesugaringEnabled=false\n"
+      ]
+    ]
+  ],
+  [
+    "miuix-preference-android",
+    200,
+    [
+      [
+        "AndroidManifest.xml",
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    package=\"top.yukonga.miuix.kmp.preference\" >\n\n    <uses-sdk android:minSdkVersion=\"24\" />\n\n</manifest>"
+      ],
+      [
+        "META-INF/com/android/build/gradle/aar-metadata.properties",
+        "aarFormatVersion=1.0\naarMetadataVersion=1.0\nminCompileSdk=37\nminCompileMinorSdk=0\nminCompileSdkExtension=0\nminAndroidGradlePluginVersion=1.0.0\ncoreLibraryDesugaringEnabled=false\n"
+      ]
+    ]
+  ]
+]
