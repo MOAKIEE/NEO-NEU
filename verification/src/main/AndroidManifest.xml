@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:label="NEU 数据验证" android:usesCleartextTraffic="false" android:allowBackup="false">
+    <application android:label="NEO NEU 数据验证" android:usesCleartextTraffic="false" android:allowBackup="false">
         <activity android:name=".VerificationActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -1,4 +1,4 @@
-# 数据层 v1 交接
+# NEO NEU · 数据层 v1 交接
 
 日期：2026-09-23。`core/contract` **v1 接口已冻结**；本文件列明已实测范围和仍缺少样本的功能。前端从当前 Git 提交继续，不重新初始化根工程。根 Gradle 与数据依赖在此交接后由前端接管。
 
@@ -39,6 +39,8 @@ lifecycleScope.launch {
 ```
 
 认证入口由 `integration/auth-web` 提供；业务查询使用 `CampusData.academic`、`.portal`、`.session` 的 `core/contract` 接口。正式业务页面不得直接用 `CampusData.localSession`、`SchoolHttp`、Cookie 或学校 URL。验证宿主不进入正式发行包。App Manifest 应保留 `INTERNET`、禁用明文传输及备份；使用 Miuix 0.9.4 时须保留 compileSdk 37、minSdk 24，并完成正式 UI 的 targetSdk 适配。
+
+`NEO NEU` 是面向用户和 Gradle 根工程的名称；现有 `edu.neu.campus.*` 是已验证 Kotlin 命名空间及 debug 宿主 ID，不应为改名批量替换。正式 `app` 的 `applicationId` 由前端在发布准备时单独确定。
 
 `QuerySnapshot.data == null` 表示尚无成功数据；成功空列表是非 null 空集合。刷新失败可保留旧 `data`、原 `lastSuccessEpochMillis` 和 `isStale=true`。Room 只在完整解析成功后写入；账号作用域为本机随机 ID，退出清除当前范围与 WebView Cookie。若重新开始认证会生成新作用域，以免未经账号身份确认时展示旧账号数据。进程重启先标 `UNVERIFIED`，由 `session.verify()` 更新两域状态。
 
