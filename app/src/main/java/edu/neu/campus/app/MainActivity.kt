@@ -56,8 +56,14 @@ class MainActivity : ComponentActivity() {
                     timetableScreen = {
                         TimetableScreen(onLoginClick = { launchLogin() })
                     },
-                    queryScreen = { PlaceholderPage("查询") },
-                    settingsScreen = { PlaceholderPage("我的") },
+                    queryScreen = {
+                        edu.neu.campus.app.feature.query.QueryScreen()
+                    },
+                    settingsScreen = {
+                        edu.neu.campus.app.feature.settings.SettingsScreen(
+                            onLoginClick = { launchLogin() }
+                        )
+                    },
                     subScreen = { dest ->
                         when (dest) {
                             is AppDestination.Grades -> {
@@ -129,6 +135,16 @@ class MainActivity : ComponentActivity() {
                             }
                             is AppDestination.Schedule, is AppDestination.BellSchedule -> {
                                 edu.neu.campus.app.feature.schedule.ScheduleScreen(
+                                    onBack = { AppNavigator.popBack() }
+                                )
+                            }
+                            is AppDestination.ServicesCatalog -> {
+                                edu.neu.campus.app.feature.services.ServicesCatalogScreen(
+                                    onBack = { AppNavigator.popBack() }
+                                )
+                            }
+                            is AppDestination.HomeSettings -> {
+                                edu.neu.campus.app.feature.settings.HomeConfigScreen(
                                     onBack = { AppNavigator.popBack() }
                                 )
                             }

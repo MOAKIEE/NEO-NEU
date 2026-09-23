@@ -136,4 +136,11 @@ object HomeLayoutConfigManager {
         }
         prefs?.edit()?.putString(KEY_MODULES, array.toString())?.apply()
     }
+
+    fun restoreDefaults() {
+        quickActionIds = defaultQuickActions
+        modules = defaultModules
+        hideBalanceByDefault = true
+        prefs?.edit()?.clear()?.apply()
+    }
 }

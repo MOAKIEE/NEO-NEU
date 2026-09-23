@@ -26,4 +26,8 @@ object CampusDataProvider {
 
     val portal: PortalRepository
         get() = if (DemoModeManager.isDemoMode) demoRepo else realData!!.portal
+
+    var isDemoMode: Boolean
+        get() = DemoModeManager.isDemoMode
+        set(value) { DemoModeManager.isDemoMode = value }
 }
