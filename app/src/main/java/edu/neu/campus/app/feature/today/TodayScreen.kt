@@ -102,19 +102,27 @@ fun TodayScreen(
     val examsSnapshot = currentTerm?.let { academic.exams(it.id).collectAsState().value }
     val tasksSnapshot by portal.tasks(TaskKind.TODO, page = 1, pageSize = 5).collectAsState()
 
-    // 首次自动同步
-    LaunchedEffect(Unit) {
-        academic.refreshTerms()
-        portal.refreshBalance(BalanceKind.CAMPUS_CARD)
-        portal.refreshBalance(BalanceKind.NETWORK)
-        portal.refreshMessages(page = 1, pageSize = 5)
+    // The page is recreated when a login scope starts. Wait for each domain's
+    // probe before issuing its queries so authentication is not raced by reads.
+    LaunchedEffect(sessionState.academic, sessionState.portal) {
+        if (sessionState.academic == DomainStatus.READY) academic.refreshTerms()
+        if (sessionState.portal == DomainStatus.READY) {
+            portal.refreshBalance(BalanceKind.CAMPUS_CARD)
+            portal.refreshBalance(BalanceKind.NETWORK)
+            portal.refreshMessages(page = 1, pageSize = 5)
+        }
     }
 
-    LaunchedEffect(currentTerm?.id, todayDateStr) {
+    LaunchedEffect(currentTerm?.id, todayDateStr, sessionState.academic) {
+        if (sessionState.academic != DomainStatus.READY) return@LaunchedEffect
         val termId = currentTerm?.id ?: return@LaunchedEffect
         academic.refreshWeeks(termId)
         academic.refreshCampuses(termId)
         academic.refreshExams(termId)
+    }
+
+    LaunchedEffect(sessionState.portal) {
+        if (sessionState.portal != DomainStatus.READY) return@LaunchedEffect
         portal.refreshTasks(TaskKind.TODO, page = 1, pageSize = 5)
     }
 
@@ -124,7 +132,8 @@ fun TodayScreen(
         arrangedCourses.filter { it.dayOfWeek == todayDayOfWeek }.sortedBy { it.beginSection }
     }
 
-    LaunchedEffect(currentTerm?.id, currentWeek?.number) {
+    LaunchedEffect(currentTerm?.id, currentWeek?.number, sessionState.academic) {
+        if (sessionState.academic != DomainStatus.READY) return@LaunchedEffect
         val termId = currentTerm?.id ?: return@LaunchedEffect
         val week = currentWeek?.number ?: return@LaunchedEffect
         academic.refreshTimetable(termId, week)

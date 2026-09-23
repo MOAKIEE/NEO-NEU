@@ -112,7 +112,8 @@ fun SettingsScreen(
                 }
                 CampusRow(
                     title = if (checkingConnection) "正在检查连接…" else "检查连接",
-                    enabled = !checkingConnection,
+                    subtitle = "检查统一门户与教务查询是否可用",
+                    enabled = !checkingConnection && sessionState.accountScope != null,
                     showChevron = true,
                     onClick = {
                         if (!checkingConnection) {
@@ -120,7 +121,14 @@ fun SettingsScreen(
                             coroutineScope.launch {
                                 try {
                                     CampusDataProvider.session.verify()
-                                    Toast.makeText(context, "连接检查完成", Toast.LENGTH_SHORT).show()
+                                    val current = CampusDataProvider.session.state.value
+                                    val message = when {
+                                        current.portal == DomainStatus.READY && current.academic == DomainStatus.READY -> "门户与教务均已连接"
+                                        current.portal == DomainStatus.READY -> "门户已连接，教务仍需登录或检查网络"
+                                        current.academic == DomainStatus.READY -> "教务已连接，门户仍需登录或检查网络"
+                                        else -> "连接尚未恢复，请检查网络或重新登录"
+                                    }
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                 } finally {
                                     checkingConnection = false
                                 }

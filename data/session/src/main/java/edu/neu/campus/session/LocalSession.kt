@@ -46,6 +46,17 @@ class LocalSession(context: Context) {
         }
     }
 
+    /** Publish both probe results together, unless the scope changed while probing. */
+    @Synchronized fun completeVerification(
+        scope: String,
+        portal: DomainStatus,
+        academic: DomainStatus
+    ): SessionState {
+        val old = mutableState.value
+        if (old.accountScope != scope) return old
+        return old.copy(portal = portal, academic = academic).also { mutableState.value = it }
+    }
+
     fun cookieHeader(url: String): String? = cookies.getCookie(url)?.takeIf { it.isNotBlank() }
     fun acceptSetCookie(url: String, value: String) {
         cookies.setCookie(url, value)

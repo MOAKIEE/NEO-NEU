@@ -27,9 +27,13 @@ import top.yukonga.miuix.kmp.basic.Text
 
 class MainActivity : ComponentActivity() {
 
-    private val loginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        lifecycleScope.launch {
-            CampusDataProvider.session.verify()
+    private val loginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val state = CampusDataProvider.session.state.value
+        if (result.resultCode != RESULT_OK ||
+            state.portal != edu.neu.campus.contract.DomainStatus.READY ||
+            state.academic != edu.neu.campus.contract.DomainStatus.READY
+        ) {
+            lifecycleScope.launch { CampusDataProvider.session.verify() }
         }
     }
 
@@ -41,9 +45,10 @@ class MainActivity : ComponentActivity() {
         edu.neu.campus.app.feature.balance.BalancePrivacyManager.init(this)
         edu.neu.campus.app.feature.messages.MessagesManager.init(this)
 
-        // 启动时复验会话
-        lifecycleScope.launch {
-            CampusDataProvider.session.verify()
+        // Only restore a session that existed at launch. A new login may start
+        // before this coroutine is scheduled, and must not be probed prematurely.
+        if (CampusDataProvider.session.state.value.accountScope != null) {
+            lifecycleScope.launch { CampusDataProvider.session.verify() }
         }
 
         setContent {

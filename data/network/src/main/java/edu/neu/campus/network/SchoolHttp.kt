@@ -49,6 +49,7 @@ class SchoolHttp(private val session: LocalSession, client: OkHttpClient? = null
 
     suspend fun execute(call: SchoolCall, parameters: Map<String, String> = emptyMap(), includeCookies: Boolean = true): String = withContext(Dispatchers.IO) {
         require(parameters.keys.all { it in call.keys }) { "Unsupported query parameter" }
+        val requestScope = session.state.value.accountScope
         val base = (call.baseUrl + call.path).toHttpUrl()
         val url = if (call.method == "GET") {
             base.newBuilder().apply { parameters.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
@@ -61,7 +62,9 @@ class SchoolHttp(private val session: LocalSession, client: OkHttpClient? = null
         } else builder.get().build()
         try {
             client.newCall(request).execute().use { response ->
-                if (includeCookies) response.headers("Set-Cookie").forEach { session.acceptSetCookie(url.toString(), it) }
+                if (includeCookies && requestScope != null && session.state.value.accountScope == requestScope) {
+                    response.headers("Set-Cookie").forEach { session.acceptSetCookie(url.toString(), it) }
+                }
                 val code = response.code
                 if (code == 401 || code in 300..399) throw SchoolHttpException(QueryError(QueryErrorKind.AUTH_REQUIRED, "学校登录状态需要恢复", true))
                 if (code == 403) throw SchoolHttpException(QueryError(QueryErrorKind.FORBIDDEN, "学校账户暂无此查询权限", false))

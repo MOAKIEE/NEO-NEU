@@ -1,35 +1,46 @@
 package edu.neu.campus.network
 
-import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.contract.QueryErrorKind
 import edu.neu.campus.contract.SessionState
 import edu.neu.campus.session.LocalSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 object SessionProbe {
-    suspend fun verify(session: LocalSession, http: SchoolHttp = SchoolHttp(session)): SessionState {
-        if (session.state.value.accountScope == null) return session.state.value
+    private val verifyLock = Mutex()
+
+    suspend fun verify(session: LocalSession, http: SchoolHttp = SchoolHttp(session)): SessionState = verifyLock.withLock {
+        val scope = session.state.value.accountScope ?: return@withLock session.state.value
         val portal = probe {
             val root = JSONObject(http.execute(SchoolCall.PORTAL_INFO))
-            root.optInt("e", -1) == 0 && root.optJSONObject("d") != null
+            when (root.optInt("e", -1)) {
+                0 -> if (root.optJSONObject("d") != null) DomainStatus.READY else DomainStatus.UNREACHABLE
+                10013 -> DomainStatus.EXPIRED
+                else -> DomainStatus.UNREACHABLE
+            }
         }
-        session.mark(Domain.PORTAL, portal)
+        if (session.state.value.accountScope != scope) return@withLock session.state.value
         val academic = probe {
             val root = JSONObject(http.execute(SchoolCall.CURRENT_TERM,
                 mapOf("CSDM" to "SYS", "ZCSDM" to "DQXNXQDM", "SFSY" to "1")))
-            root.optString("code") == "0" && root.optJSONObject("datas") != null
+            if (root.optString("code") == "0" && root.optJSONObject("datas") != null) {
+                DomainStatus.READY
+            } else DomainStatus.UNREACHABLE
         }
-        session.mark(Domain.ACADEMIC, academic)
-        return session.state.value
+        session.completeVerification(scope, portal, academic)
     }
 
-    private suspend fun probe(block: suspend () -> Boolean): DomainStatus = try {
-        if (block()) DomainStatus.READY else DomainStatus.UNREACHABLE
+    private suspend fun probe(block: suspend () -> DomainStatus): DomainStatus = try {
+        block()
     } catch (error: SchoolHttpException) {
         when (error.safeError.kind) {
             QueryErrorKind.AUTH_REQUIRED -> DomainStatus.EXPIRED
             else -> DomainStatus.UNREACHABLE
         }
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) { DomainStatus.UNREACHABLE }
 }

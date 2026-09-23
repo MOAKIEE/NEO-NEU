@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <activity android:name=".OfficialLoginActivity" android:exported="false" android:label="学校官方认证" />
+        <activity android:name=".OfficialLoginActivity" android:exported="false" android:label="学校官方认证" android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>

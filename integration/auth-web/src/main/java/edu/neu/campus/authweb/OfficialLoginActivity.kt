@@ -1,46 +1,90 @@
 package edu.neu.campus.authweb
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
-import android.os.Build
-import android.view.ViewGroup
-import android.view.WindowInsets
 import android.webkit.CookieManager
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.lifecycleScope
 import edu.neu.campus.contract.DomainStatus
+import edu.neu.campus.contract.SessionState
 import edu.neu.campus.network.SessionProbe
 import edu.neu.campus.session.LocalSession
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import edu.neu.campus.ui.components.CampusCard
+import edu.neu.campus.ui.components.CampusPill
+import edu.neu.campus.ui.components.CampusSegmentedControl
+import edu.neu.campus.ui.components.CampusTopBar
+import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
+import edu.neu.campus.ui.theme.CampusTheme
+import edu.neu.campus.ui.theme.ThemeManager
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
 
 object OfficialLogin {
     fun intent(context: Context): Intent = Intent(context, OfficialLoginActivity::class.java)
     suspend fun verifyExisting(context: Context) = SessionProbe.verify(LocalSession.get(context))
 }
 
-/** Only school HTTPS origins are navigable; there is no JavaScript bridge or form inspection. */
-class OfficialLoginActivity : Activity() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+/** The WebView only opens school HTTPS pages and never reads form fields. */
+class OfficialLoginActivity : ComponentActivity() {
+    private val portalUrl = "https://personal.neu.edu.cn/portal"
+    private val academicUrl = "https://jwxt.neu.edu.cn/jwapp/sys/homeapp/index.do"
     private lateinit var session: LocalSession
     private lateinit var web: WebView
-    private lateinit var status: TextView
+    private var selectedSite by mutableIntStateOf(0)
+    private var pageLoading by mutableStateOf(false)
+    private var pageError by mutableStateOf<String?>(null)
+    private var checking by mutableStateOf(false)
+    private var hasChecked by mutableStateOf(false)
+    private var resumingSession = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ThemeManager.init(this)
         session = LocalSession.get(this)
-        actionBar?.hide()
-        if (savedInstanceState == null) session.beginLogin()
-        status = TextView(this).apply { text = "请在学校官方页面自行登录；完成后点击验证。"; setPadding(20, 20, 20, 20) }
+        resumingSession = session.state.value.accountScope != null
+        // Repairing one service must not discard the other service's cache and state.
+        if (!resumingSession) session.beginLogin()
+        val initialState = session.state.value
+        selectedSite = savedInstanceState?.getInt("selectedSite")
+            ?: if (initialState.portal == DomainStatus.READY && initialState.academic != DomainStatus.READY) 1 else 0
+
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -50,49 +94,221 @@ class OfficialLoginActivity : Activity() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val url = request.url
                     val host = url.host.orEmpty().lowercase()
-                    val trusted = host == "neu.edu.cn" || host.endsWith(".neu.edu.cn")
-                    if (!trusted) { status.text = "已阻止非学校域名的跳转"; return true }
                     if (url.scheme == "http" && host == "jwxt.neu.edu.cn") {
-                        view.loadUrl(url.buildUpon().scheme("https").build().toString()); return true
+                        view.loadUrl(url.buildUpon().scheme("https").build().toString())
+                        return true
                     }
-                    return url.scheme != "https"
+                    val schoolHost = host == "neu.edu.cn" || host.endsWith(".neu.edu.cn")
+                    if (url.scheme == "https" && schoolHost) return false
+                    pageError = "已阻止非学校页面的跳转"
+                    return true
+                }
+
+                override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                    pageLoading = true
+                    pageError = null
+                }
+
+                override fun onPageFinished(view: WebView, url: String?) {
+                    pageLoading = false
+                }
+
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                    if (request.isForMainFrame) {
+                        pageLoading = false
+                        pageError = "学校网页暂时无法打开，请检查网络后重试。"
+                    }
                 }
             }
         }
-        val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        fun button(label: String, action: () -> Unit) { controls.addView(Button(this).apply { text = label; setOnClickListener { action() } }) }
-        button("门户登录") { web.loadUrl("https://personal.neu.edu.cn/portal") }
-        button("教务登录") { web.loadUrl("https://jwxt.neu.edu.cn/jwapp/sys/homeapp/index.do") }
-        button("验证会话") { verify() }
-        button("返回") { finish() }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(status)
-            addView(controls)
-            addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
+            web.loadUrl(if (selectedSite == 0) portalUrl else academicUrl)
         }
-        root.setOnApplyWindowInsetsListener { view, insets ->
-            val top = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.statusBars()).top else insets.systemWindowInsetTop
-            val bottom = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.navigationBars()).bottom else insets.systemWindowInsetBottom
-            view.setPadding(0, top, 0, bottom)
-            insets
+        onBackPressedDispatcher.addCallback(this) {
+            if (web.canGoBack()) web.goBack() else finish()
         }
-        setContentView(root)
-        web.loadUrl("https://personal.neu.edu.cn/portal")
+        setContent {
+            CampusTheme {
+                val state by session.state.collectAsState()
+                LoginScreen(
+                    state = state,
+                    selectedSite = selectedSite,
+                    pageLoading = pageLoading,
+                    pageError = pageError,
+                    checking = checking,
+                    hasChecked = hasChecked,
+                    resumingSession = resumingSession,
+                    web = web,
+                    onSelectSite = ::openSite,
+                    onCheck = ::checkConnection,
+                    onClose = ::finish
+                )
+            }
+        }
     }
 
-    private fun verify() {
-        status.text = "正在验证门户和教务查询会话…"
-        scope.launch {
-            val state = SessionProbe.verify(session)
-            status.text = "门户：${state.portal}；教务：${state.academic}"
-            if (state.portal == DomainStatus.READY && state.academic == DomainStatus.READY) setResult(RESULT_OK)
+    private fun openSite(index: Int) {
+        if (index !in 0..1) return
+        selectedSite = index
+        pageError = null
+        web.loadUrl(if (index == 0) portalUrl else academicUrl)
+    }
+
+    private fun checkConnection() {
+        if (checking) return
+        checking = true
+        pageError = null
+        lifecycleScope.launch {
+            try {
+                // Commit cookies set by the official page before native HTTP probes run.
+                CookieManager.getInstance().flush()
+                val result = SessionProbe.verify(session)
+                hasChecked = true
+                if (result.portal == DomainStatus.READY && result.academic == DomainStatus.READY) {
+                    setResult(RESULT_OK)
+                    finish()
+                } else if (result.portal == DomainStatus.READY && result.academic == DomainStatus.EXPIRED) {
+                    openSite(1)
+                } else if (result.academic == DomainStatus.READY && result.portal == DomainStatus.EXPIRED) {
+                    openSite(0)
+                }
+            } finally {
+                checking = false
+            }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("selectedSite", selectedSite)
+        web.saveState(outState)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
+        web.stopLoading()
         web.destroy()
-        scope.cancel()
         super.onDestroy()
+    }
+}
+
+@Composable
+private fun LoginScreen(
+    state: SessionState,
+    selectedSite: Int,
+    pageLoading: Boolean,
+    pageError: String?,
+    checking: Boolean,
+    hasChecked: Boolean,
+    resumingSession: Boolean,
+    web: WebView,
+    onSelectSite: (Int) -> Unit,
+    onCheck: () -> Unit,
+    onClose: () -> Unit
+) {
+    val colors = CampusTheme.colors
+    Scaffold(
+        modifier = Modifier.fillMaxSize().background(colors.background),
+        containerColor = colors.background
+    ) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).imePadding().background(colors.background)
+        ) {
+            CampusTopBar(
+                title = "学校登录",
+                subtitle = "在学校官方页面完成认证",
+                onBack = onClose,
+                defaultWindowInsetsPadding = false
+            )
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = CampusSpacing.screenHorizontal)
+                    .padding(bottom = CampusSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+            ) {
+                CampusCard {
+                    Text("连接状态", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
+                    Spacer(Modifier.height(CampusSpacing.xs))
+                    Row(horizontalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
+                        ConnectionStatus("统一门户", state.portal, Modifier.weight(1f))
+                        ConnectionStatus("教务系统", state.academic, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(CampusSpacing.xs))
+                    Text(connectionHint(state, hasChecked), fontSize = 12.sp, lineHeight = 18.sp, color = colors.textSecondary)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("学校官方网页", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.textSecondary)
+                    CampusPill("账号密码仅在学校网页输入")
+                }
+                CampusSegmentedControl(
+                    options = listOf("统一门户", "教务系统"),
+                    selectedIndex = selectedSite,
+                    onSelect = onSelectSite
+                )
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                        .clip(RoundedCornerShape(CampusShapes.medium))
+                        .background(Color.White)
+                        .border(1.dp, colors.outline, RoundedCornerShape(CampusShapes.medium))
+                ) {
+                    AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
+                }
+                if (pageError != null || pageLoading) {
+                    Text(
+                        pageError ?: "正在打开学校网页…",
+                        fontSize = 12.sp,
+                        color = if (pageError != null) colors.warning else colors.textSecondary
+                    )
+                }
+                Button(onClick = onCheck, enabled = !checking, modifier = Modifier.fillMaxWidth()) {
+                    Text(when {
+                        checking -> "正在检查门户与教务…"
+                        state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "检查连接并返回应用"
+                        else -> "完成登录，检查连接"
+                    })
+                }
+                if (resumingSession) {
+                    Text(
+                        "更换学校账号前，请先在「我的」退出并清除本地数据。",
+                        fontSize = 11.sp,
+                        color = colors.textTertiary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionStatus(name: String, status: DomainStatus, modifier: Modifier = Modifier) {
+    val colors = CampusTheme.colors
+    val (label, tint) = when (status) {
+        DomainStatus.READY -> "已连接" to colors.success
+        DomainStatus.SIGNED_OUT -> "未登录" to colors.textSecondary
+        DomainStatus.AUTHENTICATING -> "等待登录" to colors.brand
+        DomainStatus.UNVERIFIED -> "待检查" to colors.warning
+        DomainStatus.EXPIRED -> "需要登录" to colors.warning
+        DomainStatus.UNREACHABLE -> "暂不可达" to colors.textSecondary
+    }
+    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(name, fontSize = 12.sp, color = colors.textSecondary)
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tint)
+    }
+}
+
+private fun connectionHint(state: SessionState, hasChecked: Boolean): String {
+    if (!hasChecked) return when {
+        state.portal == DomainStatus.READY && state.academic == DomainStatus.READY ->
+            "当前连接正常；重新认证后点下方按钮确认连接。"
+        state.portal == DomainStatus.READY -> "门户已连接；请在教务页面完成登录，再检查连接。"
+        state.academic == DomainStatus.READY -> "教务已连接；请在门户页面完成登录，再检查连接。"
+        else -> "先在网页完成学校登录，再点下方按钮检查。需要时可切换到教务页面继续登录。"
+    }
+    return when {
+        state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "门户与教务均已连接。"
+        state.portal == DomainStatus.READY && state.academic == DomainStatus.EXPIRED -> "门户已连接；请在教务页面完成登录，再检查一次。"
+        state.academic == DomainStatus.READY && state.portal == DomainStatus.EXPIRED -> "教务已连接；请在门户页面完成登录，再检查一次。"
+        state.portal == DomainStatus.UNREACHABLE || state.academic == DomainStatus.UNREACHABLE ->
+            "部分连接暂时无法确认，请检查网络或稍后重试。"
+        else -> "尚未建立学校连接，请在官方网页完成登录后重试。"
     }
 }
