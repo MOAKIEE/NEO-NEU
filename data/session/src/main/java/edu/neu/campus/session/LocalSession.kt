@@ -38,19 +38,23 @@ class LocalSession(context: Context) {
     @Synchronized fun addScopeListener(listener: (String?) -> Unit) { scopeListeners += listener }
 
     suspend fun beginLogin() = cookieWrites.withLock {
+        val hadScope = state.value.accountScope != null
+        if (!hadScope) {
+            // A fresh login cannot inherit cookies left by an interrupted sign-out.
+            withContext(Dispatchers.Main.immediate) {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
+                }
+                cookies.flush()
+            }
+        }
+        // Rotating the local scope isolates old cached data if the official page switches accounts.
+        // Existing CAS and business cookies remain available for SSO during recovery.
         synchronized(this) {
             val scope = UUID.randomUUID().toString()
             preferences.edit().putString("scope", scope).apply()
             mutableState.value = SessionState(scope, DomainStatus.AUTHENTICATING, DomainStatus.AUTHENTICATING)
             scopeListeners.forEach { it(scope) }
-        }
-        // A school account cannot yet be matched across both verified domains.
-        // Quarantine the new scope from every cookie belonging to the previous account.
-        withContext(Dispatchers.Main.immediate) {
-            suspendCancellableCoroutine<Unit> { continuation ->
-                cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
-            }
-            cookies.flush()
         }
     }
 

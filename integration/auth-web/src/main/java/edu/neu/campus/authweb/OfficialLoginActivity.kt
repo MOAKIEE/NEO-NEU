@@ -3,6 +3,7 @@ package edu.neu.campus.authweb
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
@@ -52,6 +53,8 @@ import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import edu.neu.campus.ui.theme.ThemeManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -75,6 +78,8 @@ class OfficialLoginActivity : ComponentActivity() {
     private var checking by mutableStateOf(false)
     private var hasChecked by mutableStateOf(false)
     private var resumingSession = false
+    private var autoVerifyOnLoad = false
+    private var autoCheckJob: Job? = null
     private var targetDomain = Domain.PORTAL
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +88,10 @@ class OfficialLoginActivity : ComponentActivity() {
         session = LocalSession.get(this)
         targetDomain = runCatching { Domain.valueOf(intent.getStringExtra("target_domain").orEmpty()) }.getOrDefault(Domain.PORTAL)
         resumingSession = session.state.value.accountScope != null
+        autoVerifyOnLoad = when (targetDomain) {
+            Domain.PORTAL -> session.state.value.portal != DomainStatus.READY
+            Domain.ACADEMIC -> session.state.value.academic != DomainStatus.READY
+        }
         // No stable school account identifier is verified across both domains yet.
         // A visible re-authentication may switch accounts, so rotate the local cache scope.
         selectedSite = savedInstanceState?.getInt("selectedSite")
@@ -108,12 +117,21 @@ class OfficialLoginActivity : ComponentActivity() {
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                    autoCheckJob?.cancel()
                     pageLoading = true
                     pageError = null
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     pageLoading = false
+                    if (autoVerifyOnLoad && Uri.parse(url.orEmpty()).host == targetHost()) {
+                        autoCheckJob?.cancel()
+                        autoCheckJob = lifecycleScope.launch {
+                            delay(700)
+                            while (checking) delay(250)
+                            if (!pageLoading && Uri.parse(web.url.orEmpty()).host == targetHost()) checkConnection()
+                        }
+                    }
                 }
 
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -160,6 +178,11 @@ class OfficialLoginActivity : ComponentActivity() {
         web.loadUrl(if (index == 0) portalUrl else academicUrl)
     }
 
+    private fun targetHost(): String = when (targetDomain) {
+        Domain.PORTAL -> "personal.neu.edu.cn"
+        Domain.ACADEMIC -> "jwxt.neu.edu.cn"
+    }
+
     private fun checkConnection() {
         if (checking) return
         checking = true
@@ -175,6 +198,7 @@ class OfficialLoginActivity : ComponentActivity() {
                     Domain.ACADEMIC -> result.academic == DomainStatus.READY
                 }
                 if (targetReady) {
+                    autoVerifyOnLoad = false
                     setResult(RESULT_OK)
                     finish()
                 }
@@ -191,6 +215,7 @@ class OfficialLoginActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        autoCheckJob?.cancel()
         web.stopLoading()
         web.destroy()
         super.onDestroy()
@@ -274,7 +299,7 @@ private fun LoginScreen(
                 }
                 if (resumingSession) {
                     Text(
-                    "重新认证已清除旧学校会话与本地数据；请按需连接门户和教务。",
+                    "已保留学校会话以尝试恢复连接；本地数据已重新隔离，换号后不会沿用旧缓存。",
                         fontSize = 11.sp,
                         color = colors.textTertiary
                     )
