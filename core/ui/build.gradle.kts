@@ -23,7 +23,9 @@ dependencies {
     api("top.yukonga.miuix.kmp:miuix-preference-android:0.9.4")
     api("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4")
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    api("androidx.activity:activity-compose:1.10.1")
+    // Miuix overlays use NavigationBackHandler, whose dispatcher is provided by
+    // ComponentActivity starting with AndroidX Activity 1.12.
+    api("androidx.activity:activity-compose:1.13.0")
     api("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     api("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     api("androidx.compose.ui:ui:1.7.8")
