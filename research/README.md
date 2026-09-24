@@ -5,6 +5,7 @@
 | 材料 | 用途 |
 | --- | --- |
 | `apk-metadata.json` | 原 APK 的名称、包名、版本与声明权限；不是新版配置 |
+| `official-app-cookie-runtime-2026-09-24.md` | 官方教务 WebView 入口、Cookie 属性与同账号字段的脱敏运行时核验 |
 | `academic-source/` | 学校教务页面公开脚本快照，用于核对查询方法、参数及返回值消费 |
 | `portal-source/` | 门户公开脚本快照，用于核对余额、消息、日程与服务目录 |
 | `public-web/entry-observations.json` | 未登录访问链路和表单字段名记录，不包含已登录会话 |

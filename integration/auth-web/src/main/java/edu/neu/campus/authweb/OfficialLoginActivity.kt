@@ -69,7 +69,8 @@ object OfficialLogin {
 /** The WebView only opens school HTTPS pages and never reads form fields. */
 class OfficialLoginActivity : ComponentActivity() {
     private val portalUrl = "https://personal.neu.edu.cn/portal"
-    private val academicUrl = "https://jwxt.neu.edu.cn/jwapp/sys/homeapp/index.do"
+    // The official WebView starts at the school root and follows its current SSO entry redirect.
+    private val academicUrl = "https://jwxt.neu.edu.cn/"
     private lateinit var session: LocalSession
     private lateinit var web: WebView
     private var selectedSite by mutableIntStateOf(0)

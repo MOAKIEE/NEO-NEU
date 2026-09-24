@@ -45,8 +45,8 @@ class LocalSession(context: Context) {
                 suspendCancellableCoroutine<Unit> { continuation ->
                     cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
                 }
-                cookies.flush()
             }
+            withContext(Dispatchers.IO) { cookies.flush() }
         }
         // Rotating the local scope isolates old cached data if the official page switches accounts.
         // Existing CAS and business cookies remain available for SSO during recovery.
@@ -94,12 +94,12 @@ class LocalSession(context: Context) {
                 suspendCancellableCoroutine<Unit> { continuation ->
                     cookies.setCookie(url, value) { if (continuation.isActive) continuation.resume(Unit) }
                 }
-            }, flush = { cookies.flush() })
+            }, flush = { withContext(Dispatchers.IO) { cookies.flush() } })
         }
     }
 
     suspend fun flushCookies() = cookieWrites.withLock {
-        withContext(Dispatchers.Main.immediate) { cookies.flush() }
+        withContext(Dispatchers.IO) { cookies.flush() }
     }
 
     suspend fun signOut() {
@@ -114,8 +114,8 @@ class LocalSession(context: Context) {
                 suspendCancellableCoroutine<Unit> { continuation ->
                     cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
                 }
-                cookies.flush()
             }
+            withContext(Dispatchers.IO) { cookies.flush() }
         }
     }
 }

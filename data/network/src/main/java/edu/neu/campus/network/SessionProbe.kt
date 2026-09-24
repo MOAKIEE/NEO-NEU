@@ -5,6 +5,8 @@ import edu.neu.campus.contract.QueryErrorKind
 import edu.neu.campus.contract.SessionState
 import edu.neu.campus.session.LocalSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -24,22 +26,29 @@ object SessionProbe {
 
     suspend fun verify(session: LocalSession, http: SchoolHttp = clientFor(session)): SessionState = verifyLock.withLock {
         val scope = session.state.value.accountScope ?: return@withLock session.state.value
-        val portal = probe {
-            val root = JSONObject(http.execute(SchoolCall.PORTAL_INFO))
-            when (root.optInt("e", -1)) {
-                0 -> if (root.optJSONObject("d") != null) DomainStatus.READY else DomainStatus.UNREACHABLE
-                10013 -> DomainStatus.EXPIRED
-                else -> DomainStatus.UNREACHABLE
+        val (portal, academic) = coroutineScope {
+            val portal = async {
+                probe {
+                    val root = JSONObject(http.execute(SchoolCall.PORTAL_INFO))
+                    when (root.optInt("e", -1)) {
+                        0 -> if (root.optJSONObject("d") != null) DomainStatus.READY else DomainStatus.UNREACHABLE
+                        10013 -> DomainStatus.EXPIRED
+                        else -> DomainStatus.UNREACHABLE
+                    }
+                }
             }
+            val academic = async {
+                probe {
+                    val root = JSONObject(http.execute(SchoolCall.CURRENT_TERM,
+                        mapOf("CSDM" to "SYS", "ZCSDM" to "DQXNXQDM", "SFSY" to "1")))
+                    if (root.optString("code") == "0" && root.optJSONObject("datas") != null) {
+                        DomainStatus.READY
+                    } else DomainStatus.UNREACHABLE
+                }
+            }
+            portal.await() to academic.await()
         }
         if (session.state.value.accountScope != scope) return@withLock session.state.value
-        val academic = probe {
-            val root = JSONObject(http.execute(SchoolCall.CURRENT_TERM,
-                mapOf("CSDM" to "SYS", "ZCSDM" to "DQXNXQDM", "SFSY" to "1")))
-            if (root.optString("code") == "0" && root.optJSONObject("datas") != null) {
-                DomainStatus.READY
-            } else DomainStatus.UNREACHABLE
-        }
         session.completeVerification(scope, portal, academic)
     }
 
