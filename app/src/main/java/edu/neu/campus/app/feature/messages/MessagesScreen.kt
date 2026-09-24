@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.contract.CampusMessage
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.ui.components.CampusButton
@@ -72,7 +73,17 @@ fun MessagesScreen(
         MessageStatusFilter.READ -> 1
     }
     val messagesSnapshot by CampusDataProvider.portal.messages(page, 30, status).collectAsState()
-    LaunchedEffect(page, status) { CampusDataProvider.portal.refreshMessages(page, 30, status) }
+    DisposableEffect(page, status) {
+        val unregister = CampusDataProvider.sync.registerVisible(AppNavigator.currentTab, AppDestination.Messages) {
+            CampusDataProvider.portal.refreshMessages(page, 30, status)
+        }
+        onDispose { unregister() }
+    }
+    var initialMessageFilterSeen by remember { mutableStateOf(false) }
+    LaunchedEffect(page, status) {
+        if (!initialMessageFilterSeen) initialMessageFilterSeen = true
+        else CampusDataProvider.portal.refreshMessages(page, 30, status)
+    }
 
     val isRefreshing = messagesSnapshot.phase == QueryPhase.LOADING
     val allMessages = messagesSnapshot.data?.items ?: emptyList()
@@ -108,7 +119,8 @@ fun MessagesScreen(
                 IconButton(
                     onClick = {
                         coroutineScope.launch {
-                            CampusDataProvider.portal.refreshMessages(page, 30, status)
+                            CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                                edu.neu.campus.app.SyncReason.MANUAL)
                         }
                     },
                     enabled = !isRefreshing
@@ -179,7 +191,7 @@ fun MessagesScreen(
         }
         if (messagesSnapshot.isStale) {
             Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal)) {
-                SafeDataTag(text = "显示上次同步消息，可能已变化")
+            SafeDataTag(text = "消息最近同步 ${edu.neu.campus.ui.components.TimeFormatter.formatDateTime(messagesSnapshot.lastSuccessEpochMillis)} · 显示旧缓存")
             }
         }
         // 消息列表与状态展示
@@ -198,7 +210,8 @@ fun MessagesScreen(
                         error = messagesSnapshot.error,
                         onRetry = {
                             coroutineScope.launch {
-                                CampusDataProvider.portal.refreshMessages(page, 30, status)
+                                CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                                    edu.neu.campus.app.SyncReason.MANUAL)
                             }
                         },
                         onLogin = onLoginClick

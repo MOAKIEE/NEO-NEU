@@ -19,6 +19,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,6 +37,7 @@ class CampusData private constructor(context: Context) {
     private val academicApi = AcademicApi(http)
     private val portalApi = PortalApi(http)
     private val slots = ConcurrentHashMap<String, Slot<*>>()
+    private val cacheWriteLock = Mutex()
     private val worker = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableShapes = MutableStateFlow<Map<String, String>>(emptyMap())
     /** Debug host may inspect field names and types only; response values never leave the adapter. */
@@ -49,11 +51,12 @@ class CampusData private constructor(context: Context) {
         override suspend fun signOut() {
             val oldScope = state.value.accountScope
             localSession.signOut()
-            if (oldScope != null) withContext(Dispatchers.IO) { cache.clearScope(oldScope) }
+            if (oldScope != null) withContext(Dispatchers.IO) { cacheWriteLock.withLock { cache.clearScope(oldScope) } }
         }
     }
     val academic: AcademicRepository = AcademicImpl()
     val portal: PortalRepository = PortalImpl()
+    fun allowImmediateRetry() = http.allowImmediateRetry()
 
     /** Debug-host-only expiry probe: omits cookies on one whitelisted read, preserves real CookieManager. */
     suspend fun verificationOnlyAuthFailureProbe(termId: String) {
@@ -61,8 +64,12 @@ class CampusData private constructor(context: Context) {
         (academic as AcademicImpl).authFailureProbe(termId)
     }
 
-    init { localSession.addScopeListener {
+    private var activeScope = localSession.state.value.accountScope
+    init { localSession.addScopeListener { next ->
+        val old = activeScope
+        activeScope = next
         slots.values.forEach { it.invalidate() }; slots.clear(); mutableShapes.value = emptyMap()
+        if (old != null && old != next) worker.launch { cacheWriteLock.withLock { cache.clearScope(old) } }
     } }
 
     companion object {
@@ -76,6 +83,7 @@ class CampusData private constructor(context: Context) {
         val state = MutableStateFlow(initial)
         val lock = Mutex()
         val loaded = CompletableDeferred<Unit>()
+        @Volatile var generation = 0L
         fun invalidate() { state.value = QuerySnapshot() }
     }
 
@@ -104,23 +112,45 @@ class CampusData private constructor(context: Context) {
         val scope = localSession.state.value.accountScope
         val holder = slot(key, parse)
         holder.loaded.await()
+        val observedGeneration = holder.generation
         holder.lock.withLock {
+            // A caller that waited for this same flight consumes its result.
+            if (holder.generation != observedGeneration) return
+            holder.generation++
             val before = holder.state.value
-            if (scope == null) {
+            if (scope == null || localSession.state.value.accountScope != scope) {
                 holder.state.value = SnapshotTransitions.failed(before,
                     QueryError(QueryErrorKind.AUTH_REQUIRED, "请先登录学校账号", true))
                 return
             }
-            holder.state.value = SnapshotTransitions.loading(before)
+            val domainStatus = when (domain) {
+                Domain.PORTAL -> localSession.state.value.portal
+                Domain.ACADEMIC -> localSession.state.value.academic
+            }
+            if (domainStatus == DomainStatus.AUTHENTICATING || domainStatus == DomainStatus.EXPIRED) {
+                holder.state.value = SnapshotTransitions.failed(before,
+                    QueryError(QueryErrorKind.AUTH_REQUIRED, "请在学校官方页面恢复登录", true))
+                return
+            }
+            val loading = SnapshotTransitions.loading(before)
+            holder.state.value = loading
             try {
                 val raw = fetch()
-                recordShape(key, raw)
                 val parsed = withContext(Dispatchers.Default) { parse(raw) }
                 if (localSession.state.value.accountScope != scope) return
+                recordShape(key, raw)
                 val now = System.currentTimeMillis()
-                withContext(Dispatchers.IO) { cache.save(scope, key, raw, now) }
+                withContext(Dispatchers.IO) {
+                    cacheWriteLock.withLock {
+                        if (localSession.state.value.accountScope == scope) cache.save(scope, key, raw, now)
+                    }
+                }
+                if (localSession.state.value.accountScope != scope) return
                 holder.state.value = SnapshotTransitions.succeeded(parsed, now)
-                localSession.mark(domain, DomainStatus.READY)
+                localSession.markIfScope(scope, domain, DomainStatus.READY)
+            } catch (error: CancellationException) {
+                if (localSession.state.value.accountScope == scope) holder.state.value = before
+                throw error
             } catch (error: Exception) {
                 if (localSession.state.value.accountScope != scope) return
                 val safe = when (error) {
@@ -131,8 +161,10 @@ class CampusData private constructor(context: Context) {
                     is IllegalArgumentException -> QueryError(QueryErrorKind.UNSUPPORTED, "查询对象不在当前账号已取得的列表中", false)
                     else -> QueryError(QueryErrorKind.UNKNOWN, "查询失败，请稍后重试", true)
                 }
-                if (safe.kind == QueryErrorKind.AUTH_REQUIRED) localSession.mark(domain, DomainStatus.EXPIRED)
-                holder.state.value = SnapshotTransitions.failed(before, safe)
+                if (safe.kind == QueryErrorKind.AUTH_REQUIRED) localSession.markIfScope(scope, domain, DomainStatus.EXPIRED)
+                else if (safe.kind == QueryErrorKind.NETWORK || safe.kind == QueryErrorKind.SERVER || safe.kind == QueryErrorKind.MAINTENANCE)
+                    localSession.markIfScope(scope, domain, DomainStatus.UNREACHABLE)
+                holder.state.value = SnapshotTransitions.failed(loading, safe)
             }
         }
     }

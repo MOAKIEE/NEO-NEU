@@ -104,42 +104,12 @@ fun TodayScreen(
     val examsSnapshot = currentTerm?.let { academic.exams(it.id).collectAsState().value }
     val tasksSnapshot by portal.tasks(TaskKind.TODO, page = 1, pageSize = 5).collectAsState()
 
-    // The page is recreated when a login scope starts. Wait for each domain's
-    // probe before issuing its queries so authentication is not raced by reads.
-    LaunchedEffect(sessionState.academic, sessionState.portal) {
-        if (sessionState.academic == DomainStatus.READY) academic.refreshTerms()
-        if (sessionState.portal == DomainStatus.READY) {
-            portal.refreshBalance(BalanceKind.CAMPUS_CARD)
-            portal.refreshBalance(BalanceKind.NETWORK)
-            portal.refreshMessages(page = 1, pageSize = 5)
-        }
-    }
-
-    LaunchedEffect(currentTerm?.id, todayDateStr, sessionState.academic) {
-        if (sessionState.academic != DomainStatus.READY) return@LaunchedEffect
-        val termId = currentTerm?.id ?: return@LaunchedEffect
-        academic.refreshWeeks(termId)
-        academic.refreshCampuses(termId)
-        academic.refreshExams(termId)
-    }
-
-    LaunchedEffect(sessionState.portal) {
-        if (sessionState.portal != DomainStatus.READY) return@LaunchedEffect
-        portal.refreshTasks(TaskKind.TODO, page = 1, pageSize = 5)
-    }
-
     // 计算今日排课
     val arrangedCourses = timetableSnapshot?.data?.arranged.orEmpty()
     val todayCourses = remember(arrangedCourses, todayDayOfWeek) {
         arrangedCourses.filter { it.dayOfWeek == todayDayOfWeek }.sortedBy { it.beginSection }
     }
 
-    LaunchedEffect(currentTerm?.id, currentWeek?.number, sessionState.academic) {
-        if (sessionState.academic != DomainStatus.READY) return@LaunchedEffect
-        val termId = currentTerm?.id ?: return@LaunchedEffect
-        val week = currentWeek?.number ?: return@LaunchedEffect
-        academic.refreshTimetable(termId, week)
-    }
     val nowTimeStr = SimpleDateFormat("HH:mm", Locale.CHINA).apply {
         timeZone = TimeZone.getTimeZone("Asia/Shanghai")
     }.format(schoolClock.time)
@@ -158,11 +128,8 @@ fun TodayScreen(
     val pageScrollBehavior = MiuixScrollBehavior()
     val retryCourses: () -> Unit = {
         coroutineScope.launch {
-            academic.refreshTerms()
-            currentTerm?.let { term ->
-                academic.refreshWeeks(term.id)
-                currentWeek?.let { academic.refreshTimetable(term.id, it.number) }
-            }
+            CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                edu.neu.campus.app.SyncReason.MANUAL)
         }
     }
     val weekText = currentWeek?.number?.let { " · 第 $it 教学周" }.orEmpty()
@@ -377,7 +344,7 @@ fun TodayScreen(
                                     }
                                     if (examsSnapshot?.error != null) {
                                         Spacer(modifier = Modifier.height(CampusSpacing.xs))
-                                        SafeDataTag(text = "考试更新失败：${examsSnapshot.error?.message}")
+                                        SafeDataTag(text = "考试最近同步 ${TimeFormatter.formatDateTime(examsSnapshot.lastSuccessEpochMillis)} · 更新失败：${examsSnapshot.error?.message}")
                                     } else if (examsSnapshot?.isStale == true) {
                                         Spacer(modifier = Modifier.height(CampusSpacing.xs))
                                         SafeDataTag(text = "考试摘要为上次同步数据")
@@ -418,7 +385,7 @@ fun TodayScreen(
                                     }
                                     if (tasksSnapshot.error != null) {
                                         Spacer(modifier = Modifier.height(CampusSpacing.xs))
-                                        SafeDataTag(text = "待办更新失败：${tasksSnapshot.error?.message}")
+                                        SafeDataTag(text = "待办最近同步 ${TimeFormatter.formatDateTime(tasksSnapshot.lastSuccessEpochMillis)} · 更新失败：${tasksSnapshot.error?.message}")
                                     } else if (tasksSnapshot.isStale) {
                                         Spacer(modifier = Modifier.height(CampusSpacing.xs))
                                         SafeDataTag(text = "待办摘要为上次同步数据")
@@ -797,10 +764,14 @@ private fun BalanceSummaryCard(
             )
 
             Text(
-                text = stateError ?: if (stale) "显示上次同步余额" else "最近同步 ${TimeFormatter.formatTime(lastSuccessEpochMillis)}",
+                text = buildString {
+                    append("最近同步 ${TimeFormatter.formatDateTime(lastSuccessEpochMillis)}")
+                    if (stateError != null) append(" · $stateError")
+                    else if (stale) append(" · 显示旧缓存")
+                },
                 fontSize = 11.sp,
                 color = colors.textSecondary,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }

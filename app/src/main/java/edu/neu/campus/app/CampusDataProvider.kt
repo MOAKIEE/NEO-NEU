@@ -8,6 +8,7 @@ import edu.neu.campus.repository.CampusData
 
 object CampusDataProvider {
     private var realData: CampusData? = null
+    val sync = SyncCoordinator()
 
     fun init(context: Context) {
         if (realData == null) {
@@ -23,4 +24,6 @@ object CampusDataProvider {
 
     val portal: PortalRepository
         get() = realData!!.portal
+
+    fun allowImmediateRetry() = realData!!.allowImmediateRetry()
 }

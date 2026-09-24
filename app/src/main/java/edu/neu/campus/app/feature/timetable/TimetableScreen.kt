@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.contract.*
 import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusDropdownArrow
@@ -89,12 +90,6 @@ fun TimetableScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (terms.isEmpty()) {
-            academic.refreshTerms()
-        }
-    }
-
     val currentTerm = selectedTerm
     var weeks by remember { mutableStateOf<List<TeachingWeek>>(emptyList()) }
     var campuses by remember { mutableStateOf<List<Campus>>(emptyList()) }
@@ -102,10 +97,14 @@ fun TimetableScreen(
     var selectedCampusId by rememberSaveable(currentTerm?.id) { mutableStateOf<String?>(null) }
     var isListView by rememberSaveable { mutableStateOf(false) }
 
+    var initialTableTermSeen by remember { mutableStateOf(false) }
     LaunchedEffect(currentTerm?.id) {
         val termId = currentTerm?.id ?: return@LaunchedEffect
-        academic.refreshWeeks(termId)
-        academic.refreshCampuses(termId)
+        if (!initialTableTermSeen) initialTableTermSeen = true
+        else {
+            academic.refreshWeeks(termId)
+            academic.refreshCampuses(termId)
+        }
     }
 
     val weeksSnapshot = currentTerm?.let { academic.weeks(it.id).collectAsState().value }
@@ -126,9 +125,26 @@ fun TimetableScreen(
         academic.timetable(currentTerm.id, selectedWeekNumber).collectAsState().value
     } else null
 
+    DisposableEffect(currentTerm?.id, selectedWeekNumber) {
+        val unregister = CampusDataProvider.sync.registerVisible(MainTab.TIMETABLE, AppDestination.Main) {
+            academic.refreshTerms()
+            val termId = currentTerm?.id ?: academic.terms().value.data?.firstOrNull { it.isCurrent }?.id
+            if (termId != null) {
+                academic.refreshWeeks(termId)
+                academic.refreshCampuses(termId)
+                val week = selectedWeekNumber ?: academic.weeks(termId).value.data?.firstOrNull { it.isCurrent }?.number
+                academic.refreshTimetable(termId, week)
+            }
+        }
+        onDispose { unregister() }
+    }
+
+    var initialTableWeekSeen by remember { mutableStateOf(false) }
     LaunchedEffect(currentTerm?.id, selectedWeekNumber) {
         val termId = currentTerm?.id ?: return@LaunchedEffect
-        academic.refreshTimetable(termId, selectedWeekNumber)
+        val week = selectedWeekNumber ?: return@LaunchedEffect
+        if (!initialTableWeekSeen) initialTableWeekSeen = true
+        else academic.refreshTimetable(termId, week)
     }
 
     var inspectingCourse by remember { mutableStateOf<CourseOccurrence?>(null) }
@@ -228,8 +244,8 @@ fun TimetableScreen(
                 error = scheduleError,
                 onRetry = {
                     coroutineScope.launch {
-                        academic.refreshTerms()
-                        currentTerm?.let { academic.refreshWeeks(it.id) }
+                        CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                            edu.neu.campus.app.SyncReason.MANUAL)
                     }
                 },
                 onLogin = onLoginClick
@@ -237,7 +253,7 @@ fun TimetableScreen(
         }
         if (timetableSnapshot?.isStale == true) {
             Box(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal)) {
-                SafeDataTag(text = "当前显示上次同步课表，可能已变化")
+                SafeDataTag(text = "课表最近同步 ${edu.neu.campus.ui.components.TimeFormatter.formatDateTime(timetableSnapshot.lastSuccessEpochMillis)} · 显示旧缓存")
             }
         }
         if (timetablePanelVisible) {
@@ -245,8 +261,9 @@ fun TimetableScreen(
                 isLoading = timetableSnapshot.phase == QueryPhase.LOADING && timetableSnapshot.data == null,
                 error = timetableSnapshot.error,
                 onRetry = {
-                    currentTerm?.let {
-                        coroutineScope.launch { academic.refreshTimetable(it.id, selectedWeekNumber) }
+                    coroutineScope.launch {
+                        CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                            edu.neu.campus.app.SyncReason.MANUAL)
                     }
                 },
                 onLogin = onLoginClick

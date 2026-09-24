@@ -6,21 +6,23 @@ import kotlinx.coroutines.flow.StateFlow
 object ContractVersion { const val V1 = 1 }
 
 enum class QueryPhase { IDLE, LOADING, READY, FAILED }
-enum class QueryErrorKind { AUTH_REQUIRED, FORBIDDEN, NETWORK, SERVER, SCHEMA_CHANGED, UNSUPPORTED, UNKNOWN }
+enum class QueryErrorKind { AUTH_REQUIRED, FORBIDDEN, NETWORK, SERVER, RATE_LIMITED, REDIRECT, NOT_MODIFIED, MAINTENANCE, SCHEMA_CHANGED, UNSUPPORTED, UNKNOWN }
 data class QueryError(val kind: QueryErrorKind, val message: String, val retryable: Boolean)
 data class QuerySnapshot<T>(
     val data: T? = null,
     val phase: QueryPhase = QueryPhase.IDLE,
     val lastSuccessEpochMillis: Long? = null,
     val isStale: Boolean = false,
-    val error: QueryError? = null
+    val error: QueryError? = null,
+    val lastAttemptEpochMillis: Long? = null
 )
 
 object SnapshotTransitions {
     fun <T> loading(previous: QuerySnapshot<T>): QuerySnapshot<T> = previous.copy(
-        phase = QueryPhase.LOADING, isStale = previous.data != null, error = null
+        phase = QueryPhase.LOADING, isStale = previous.data != null, error = null,
+        lastAttemptEpochMillis = System.currentTimeMillis()
     )
-    fun <T> succeeded(value: T, time: Long): QuerySnapshot<T> = QuerySnapshot(value, QueryPhase.READY, time, false, null)
+    fun <T> succeeded(value: T, time: Long): QuerySnapshot<T> = QuerySnapshot(value, QueryPhase.READY, time, false, null, time)
     fun <T> failed(previous: QuerySnapshot<T>, error: QueryError): QuerySnapshot<T> = previous.copy(
         phase = QueryPhase.FAILED, isStale = previous.data != null, error = error
     )

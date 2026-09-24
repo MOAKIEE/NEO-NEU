@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.contract.*
 import edu.neu.campus.ui.components.*
 import edu.neu.campus.ui.theme.CampusShapes
@@ -65,20 +66,27 @@ fun GradesScreen(
     val availableTerms = gradeTermIdsSnapshot.data ?: termsSnapshot.data?.map { it.id }.orEmpty()
     var selectedTermId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        academic.refreshTerms()
-        academic.refreshGradeTermIds()
-        academic.refreshGradeSummary()
-    }
-
     val activeTermId = selectedTermId ?: availableTerms.firstOrNull() ?: ""
     val gradesSnapshot = if (activeTermId.isNotBlank()) {
         academic.grades(activeTermId).collectAsState().value
     } else null
 
+    DisposableEffect(selectedTermId, availableTerms) {
+        val unregister = CampusDataProvider.sync.registerVisible(AppNavigator.currentTab, AppDestination.Grades) {
+            academic.refreshTerms()
+            academic.refreshGradeTermIds()
+            academic.refreshGradeSummary()
+            val termId = selectedTermId ?: academic.gradeTermIds().value.data?.firstOrNull()
+            if (!termId.isNullOrBlank()) academic.refreshGrades(termId)
+        }
+        onDispose { unregister() }
+    }
+
+    var initialGradeTermSeen by remember { mutableStateOf(false) }
     LaunchedEffect(activeTermId) {
         if (activeTermId.isNotBlank()) {
-            academic.refreshGrades(activeTermId)
+            if (!initialGradeTermSeen) initialGradeTermSeen = true
+            else academic.refreshGrades(activeTermId)
         }
     }
 
@@ -210,17 +218,15 @@ fun GradesScreen(
                         false, error = pageError,
                         onRetry = {
                             coroutineScope.launch {
-                                if (gradeSummarySnapshot.error != null) academic.refreshGradeSummary()
-                                if (termsSnapshot.error != null) academic.refreshTerms()
-                                if (gradeTermIdsSnapshot.error != null) academic.refreshGradeTermIds()
-                                if (gradesSnapshot?.error != null) academic.refreshGrades(activeTermId)
+                                CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                                    edu.neu.campus.app.SyncReason.MANUAL)
                             }
                         },
                         onLogin = onLoginClick
                     )
                 }
             }
-            if (gradeSummarySnapshot.isStale) item { SafeDataTag(text = "绩点为上次同步数据") }
+            if (gradeSummarySnapshot.isStale) item { SafeDataTag(text = "绩点最近同步 ${TimeFormatter.formatDateTime(gradeSummarySnapshot.lastSuccessEpochMillis)} · 显示旧缓存") }
 
             // 2. 学期选择与排序
             item {
@@ -263,7 +269,7 @@ fun GradesScreen(
                         LoadStatePanel(
                             isLoading = gradesSnapshot.phase == QueryPhase.LOADING && gradesSnapshot.data == null,
                             error = gradesSnapshot.error,
-                            onRetry = { coroutineScope.launch { academic.refreshGrades(activeTermId) } },
+                            onRetry = { coroutineScope.launch { CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, edu.neu.campus.app.SyncReason.MANUAL) } },
                             onLogin = onLoginClick
                         )
                     }

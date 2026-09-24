@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.ui.components.AnimatedNumber
 import edu.neu.campus.ui.components.CampusCard
@@ -62,11 +63,6 @@ fun GradeDetailScreen(
         academic.gradeDetail(termId, sourceId).collectAsState().value
     } else null
 
-    LaunchedEffect(termId, sourceId) {
-        if (termId.isNotBlank() && sourceId.isNotBlank()) {
-            academic.refreshGradeDetail(termId, sourceId)
-        }
-    }
 
     val pageScrollBehavior = MiuixScrollBehavior()
     Column(
@@ -266,7 +262,7 @@ fun GradeDetailScreen(
                             LoadStatePanel(
                                 isLoading = false,
                                 error = detailSnapshot.error,
-                                onRetry = { scope.launch { academic.refreshGradeDetail(termId, sourceId) } }
+                                onRetry = { scope.launch { CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, edu.neu.campus.app.SyncReason.MANUAL) } }
                             )
                         }
                     }

@@ -21,6 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.navigation.AppDestination
+import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.contract.CampusTask
 import edu.neu.campus.contract.QueryErrorKind
 import edu.neu.campus.contract.QueryPhase
@@ -70,7 +73,17 @@ fun TasksScreen(
         TaskKind.APPLICATION to "我的申请"
     )
 
-    LaunchedEffect(activeTab) { CampusDataProvider.portal.refreshTasks(activeTab, 1, 20) }
+    DisposableEffect(activeTab) {
+        val unregister = CampusDataProvider.sync.registerVisible(AppNavigator.currentTab, AppNavigator.currentDestination) {
+            CampusDataProvider.portal.refreshTasks(activeTab, 1, 20)
+        }
+        onDispose { unregister() }
+    }
+    var initialTaskTabSeen by remember { mutableStateOf(false) }
+    LaunchedEffect(activeTab) {
+        if (!initialTaskTabSeen) initialTaskTabSeen = true
+        else CampusDataProvider.portal.refreshTasks(activeTab, 1, 20)
+    }
 
     // 观察当前选中的任务种类数据
     val tasksSnapshot by CampusDataProvider.portal.tasks(kind = activeTab, page = 1, pageSize = 20).collectAsState()
@@ -92,7 +105,8 @@ fun TasksScreen(
                 IconButton(
                     onClick = {
                         coroutineScope.launch {
-                            CampusDataProvider.portal.refreshTasks(kind = activeTab, page = 1, pageSize = 20)
+                            CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                                edu.neu.campus.app.SyncReason.MANUAL)
                         }
                     },
                     enabled = !isRefreshing
@@ -108,7 +122,7 @@ fun TasksScreen(
 
         if (tasksSnapshot.isStale) {
             Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xxs)) {
-                SafeDataTag(text = "显示上次同步待办，可能已变化")
+                SafeDataTag(text = "待办最近同步 ${edu.neu.campus.ui.components.TimeFormatter.formatDateTime(tasksSnapshot.lastSuccessEpochMillis)} · 显示旧缓存")
             }
         }
 
@@ -145,7 +159,8 @@ fun TasksScreen(
                         error = error,
                         onRetry = {
                             coroutineScope.launch {
-                                CampusDataProvider.portal.refreshTasks(kind = activeTab, page = 1, pageSize = 20)
+                                CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                                    edu.neu.campus.app.SyncReason.MANUAL)
                             }
                         },
                         onLogin = onLoginClick

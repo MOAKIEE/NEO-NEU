@@ -26,51 +26,38 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Text
 
 class MainActivity : ComponentActivity() {
+    private val authCoordinator = AuthCoordinator()
 
     private val loginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val state = CampusDataProvider.session.state.value
-        if (result.resultCode != RESULT_OK ||
-            state.portal != edu.neu.campus.contract.DomainStatus.READY ||
-            state.academic != edu.neu.campus.contract.DomainStatus.READY
-        ) {
+        if (authCoordinator.complete(result.resultCode == RESULT_OK)) {
+            lifecycleScope.launch {
+                try {
+                    CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.MANUAL)
+                } finally {
+                    authCoordinator.replayFinished()
+                }
+            }
+        } else {
             lifecycleScope.launch { CampusDataProvider.session.verify() }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        authCoordinator.restorePending(savedInstanceState?.getString("recovery_domain"))
         CampusDataProvider.init(this)
         ThemeManager.init(this)
         HomeLayoutConfigManager.init(this)
         edu.neu.campus.app.feature.balance.BalancePrivacyManager.init(this)
         edu.neu.campus.app.feature.messages.MessagesManager.init(this)
 
-        // Only restore a session that existed at launch. A new login may start
-        // before this coroutine is scheduled, and must not be probed prematurely.
-        if (CampusDataProvider.session.state.value.accountScope != null) {
-            lifecycleScope.launch { CampusDataProvider.session.verify() }
-        }
-
         setContent {
             CampusTheme {
                 val session by CampusDataProvider.session.state.collectAsState()
-                LaunchedEffect(session.accountScope, session.academic == edu.neu.campus.contract.DomainStatus.READY) {
-                    if (session.academic == edu.neu.campus.contract.DomainStatus.READY) {
-                        val repo = CampusDataProvider.academic
-                        repo.refreshTerms()
-                        repo.terms().value.data?.firstOrNull { it.isCurrent }?.let { term ->
-                            repo.refreshWeeks(term.id)
-                            repo.weeks(term.id).value.data?.firstOrNull { it.isCurrent }?.let { week ->
-                                repo.refreshTimetable(term.id, week.number)
-                            }
-                        }
-                    }
-                }
-                LaunchedEffect(session.accountScope, session.portal == edu.neu.campus.contract.DomainStatus.READY) {
-                    if (session.portal == edu.neu.campus.contract.DomainStatus.READY) {
-                        CampusDataProvider.portal.refreshBalance(edu.neu.campus.contract.BalanceKind.CAMPUS_CARD)
-                        CampusDataProvider.portal.refreshBalance(edu.neu.campus.contract.BalanceKind.NETWORK)
-                    }
+                val tab = AppNavigator.currentTab
+                val destination = AppNavigator.currentDestination
+                LaunchedEffect(session.accountScope, tab, destination) {
+                    CampusDataProvider.sync.requestVisible(tab, destination, SyncReason.PAGE_ENTER)
                 }
                 key(session.accountScope) {
                 MainScreen(
@@ -199,6 +186,34 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun launchLogin() {
-        loginLauncher.launch(OfficialLogin.intent(this))
+        val destination = AppNavigator.currentDestination
+        val state = CampusDataProvider.session.state.value
+        val academicPage = AppNavigator.currentTab == edu.neu.campus.app.navigation.MainTab.TIMETABLE ||
+            destination is AppDestination.Grades || destination is AppDestination.GradeDetail ||
+            destination is AppDestination.Exams || destination is AppDestination.ExamDetail ||
+            destination is AppDestination.Schedule || destination is AppDestination.BellSchedule
+        val domain = when {
+            state.academic == edu.neu.campus.contract.DomainStatus.EXPIRED &&
+                state.portal != edu.neu.campus.contract.DomainStatus.EXPIRED -> edu.neu.campus.contract.Domain.ACADEMIC
+            state.portal == edu.neu.campus.contract.DomainStatus.EXPIRED &&
+                state.academic != edu.neu.campus.contract.DomainStatus.EXPIRED -> edu.neu.campus.contract.Domain.PORTAL
+            academicPage -> edu.neu.campus.contract.Domain.ACADEMIC
+            else -> edu.neu.campus.contract.Domain.PORTAL
+        }
+        if (!authCoordinator.begin(domain)) return
+        loginLauncher.launch(OfficialLogin.intent(this, domain))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // First resume is coalesced with the initial route event by SyncCoordinator.
+        if (!authCoordinator.suppressResume()) lifecycleScope.launch {
+            CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.FOREGROUND)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("recovery_domain", authCoordinator.pendingDomainName())
+        super.onSaveInstanceState(outState)
     }
 }

@@ -11,8 +11,18 @@ import org.json.JSONObject
 
 object SessionProbe {
     private val verifyLock = Mutex()
+    private var sharedSession: LocalSession? = null
+    private var sharedHttp: SchoolHttp? = null
 
-    suspend fun verify(session: LocalSession, http: SchoolHttp = SchoolHttp(session)): SessionState = verifyLock.withLock {
+    @Synchronized private fun clientFor(session: LocalSession): SchoolHttp {
+        if (sharedSession !== session || sharedHttp == null) {
+            sharedSession = session
+            sharedHttp = SchoolHttp(session)
+        }
+        return sharedHttp!!
+    }
+
+    suspend fun verify(session: LocalSession, http: SchoolHttp = clientFor(session)): SessionState = verifyLock.withLock {
         val scope = session.state.value.accountScope ?: return@withLock session.state.value
         val portal = probe {
             val root = JSONObject(http.execute(SchoolCall.PORTAL_INFO))

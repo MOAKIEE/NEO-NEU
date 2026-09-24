@@ -13,6 +13,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.navigation.AppDestination
+import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.ui.components.*
 import edu.neu.campus.ui.theme.CampusShapes
@@ -45,9 +48,21 @@ fun ScheduleScreen(
         ?: terms.data?.firstOrNull { it.isCurrent }
     val weeks = term?.let { repo.weeks(it.id).collectAsState().value }
     val table = term?.let { repo.timetable(it.id, null).collectAsState().value }
-    LaunchedEffect(Unit) { repo.refreshTerms() }
+    DisposableEffect(term?.id, calendar) {
+        val unregister = CampusDataProvider.sync.registerVisible(AppNavigator.currentTab, AppNavigator.currentDestination) {
+            repo.refreshTerms()
+            val termId = term?.id ?: repo.terms().value.data?.firstOrNull { it.isCurrent }?.id
+            if (termId != null) {
+                if (calendar) repo.refreshWeeks(termId) else repo.refreshTimetable(termId, null)
+            }
+        }
+        onDispose { unregister() }
+    }
+    var initialScheduleTermSeen by remember { mutableStateOf(false) }
     LaunchedEffect(term?.id) {
-        term?.let { repo.refreshWeeks(it.id); repo.refreshTimetable(it.id, null) }
+        val active = term ?: return@LaunchedEffect
+        if (!initialScheduleTermSeen) initialScheduleTermSeen = true
+        else { repo.refreshWeeks(active.id); repo.refreshTimetable(active.id, null) }
     }
     val pageScrollBehavior = MiuixScrollBehavior()
     Column(
@@ -95,8 +110,8 @@ fun ScheduleScreen(
                 error = error,
                 onRetry = {
                     scope.launch {
-                        repo.refreshTerms()
-                        term?.let { if (calendar) repo.refreshWeeks(it.id) else repo.refreshTimetable(it.id, null) }
+                        CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination,
+                            edu.neu.campus.app.SyncReason.MANUAL)
                     }
                 },
                 onLogin = onLoginClick

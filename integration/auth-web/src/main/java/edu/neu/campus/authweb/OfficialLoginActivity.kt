@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import edu.neu.campus.contract.DomainStatus
+import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.SessionState
 import edu.neu.campus.network.SessionProbe
 import edu.neu.campus.session.LocalSession
@@ -57,7 +58,8 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 
 object OfficialLogin {
-    fun intent(context: Context): Intent = Intent(context, OfficialLoginActivity::class.java)
+    fun intent(context: Context, domain: Domain = Domain.PORTAL): Intent =
+        Intent(context, OfficialLoginActivity::class.java).putExtra("target_domain", domain.name)
     suspend fun verifyExisting(context: Context) = SessionProbe.verify(LocalSession.get(context))
 }
 
@@ -73,17 +75,18 @@ class OfficialLoginActivity : ComponentActivity() {
     private var checking by mutableStateOf(false)
     private var hasChecked by mutableStateOf(false)
     private var resumingSession = false
+    private var targetDomain = Domain.PORTAL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemeManager.init(this)
         session = LocalSession.get(this)
+        targetDomain = runCatching { Domain.valueOf(intent.getStringExtra("target_domain").orEmpty()) }.getOrDefault(Domain.PORTAL)
         resumingSession = session.state.value.accountScope != null
-        // Repairing one service must not discard the other service's cache and state.
-        if (!resumingSession) session.beginLogin()
-        val initialState = session.state.value
+        // No stable school account identifier is verified across both domains yet.
+        // A visible re-authentication may switch accounts, so rotate the local cache scope.
         selectedSite = savedInstanceState?.getInt("selectedSite")
-            ?: if (initialState.portal == DomainStatus.READY && initialState.academic != DomainStatus.READY) 1 else 0
+            ?: if (targetDomain == Domain.ACADEMIC) 1 else 0
 
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -121,8 +124,11 @@ class OfficialLoginActivity : ComponentActivity() {
                 }
             }
         }
-        if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
-            web.loadUrl(if (selectedSite == 0) portalUrl else academicUrl)
+        lifecycleScope.launch {
+            if (savedInstanceState == null) session.beginLogin()
+            if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
+                web.loadUrl(if (selectedSite == 0) portalUrl else academicUrl)
+            }
         }
         onBackPressedDispatcher.addCallback(this) {
             if (web.canGoBack()) web.goBack() else finish()
@@ -161,16 +167,16 @@ class OfficialLoginActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 // Commit cookies set by the official page before native HTTP probes run.
-                CookieManager.getInstance().flush()
+                session.flushCookies()
                 val result = SessionProbe.verify(session)
                 hasChecked = true
-                if (result.portal == DomainStatus.READY && result.academic == DomainStatus.READY) {
+                val targetReady = when (targetDomain) {
+                    Domain.PORTAL -> result.portal == DomainStatus.READY
+                    Domain.ACADEMIC -> result.academic == DomainStatus.READY
+                }
+                if (targetReady) {
                     setResult(RESULT_OK)
                     finish()
-                } else if (result.portal == DomainStatus.READY && result.academic == DomainStatus.EXPIRED) {
-                    openSite(1)
-                } else if (result.academic == DomainStatus.READY && result.portal == DomainStatus.EXPIRED) {
-                    openSite(0)
                 }
             } finally {
                 checking = false
@@ -259,7 +265,7 @@ private fun LoginScreen(
                         color = if (pageError != null) colors.warning else colors.textSecondary
                     )
                 }
-                Button(onClick = onCheck, enabled = !checking, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onCheck, enabled = !checking && !pageLoading, modifier = Modifier.fillMaxWidth()) {
                     Text(when {
                         checking -> "正在检查门户与教务…"
                         state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "检查连接并返回应用"
@@ -268,7 +274,7 @@ private fun LoginScreen(
                 }
                 if (resumingSession) {
                     Text(
-                        "更换学校账号前，请先在「我的」退出并清除本地数据。",
+                    "重新认证已清除旧学校会话与本地数据；请按需连接门户和教务。",
                         fontSize = 11.sp,
                         color = colors.textTertiary
                     )

@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.contract.Exam
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.contract.Term
@@ -68,20 +69,25 @@ fun ExamsScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (terms.isEmpty()) {
-            academic.refreshTerms()
-        }
-    }
-
     val currentTerm = selectedTerm
     val examsSnapshot = if (currentTerm != null) {
         academic.exams(currentTerm.id).collectAsState().value
     } else null
 
+    DisposableEffect(currentTerm?.id) {
+        val unregister = CampusDataProvider.sync.registerVisible(AppNavigator.currentTab, AppDestination.Exams) {
+            academic.refreshTerms()
+            val termId = currentTerm?.id ?: academic.terms().value.data?.firstOrNull { it.isCurrent }?.id
+            if (termId != null) academic.refreshExams(termId)
+        }
+        onDispose { unregister() }
+    }
+
+    var initialExamTermSeen by remember { mutableStateOf(false) }
     LaunchedEffect(currentTerm?.id) {
         val termId = currentTerm?.id ?: return@LaunchedEffect
-        academic.refreshExams(termId)
+        if (!initialExamTermSeen) initialExamTermSeen = true
+        else academic.refreshExams(termId)
     }
 
     var selectedTab by rememberSaveable { mutableStateOf(ExamTab.ARRANGED) }
@@ -155,7 +161,7 @@ fun ExamsScreen(
 
             if (termsSnapshot.error != null) item {
                 LoadStatePanel(false, error = termsSnapshot.error,
-                    onRetry = { coroutineScope.launch { academic.refreshTerms() } }, onLogin = onLoginClick)
+                    onRetry = { coroutineScope.launch { CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, edu.neu.campus.app.SyncReason.MANUAL) } }, onLogin = onLoginClick)
             }
             // 3. 错误与加载处理
             // 学期已失败时考试列表必然跟着失败，只保留上面那张状态卡。
@@ -167,9 +173,7 @@ fun ExamsScreen(
                         isLoading = examsSnapshot.phase == QueryPhase.LOADING && examsSnapshot.data == null,
                         error = examsSnapshot.error,
                         onRetry = {
-                            currentTerm?.let {
-                                coroutineScope.launch { academic.refreshExams(it.id) }
-                            }
+                            coroutineScope.launch { CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, edu.neu.campus.app.SyncReason.MANUAL) }
                         },
                         onLogin = onLoginClick
                     )

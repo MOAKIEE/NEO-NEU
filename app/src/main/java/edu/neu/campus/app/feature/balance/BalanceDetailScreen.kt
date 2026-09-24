@@ -107,7 +107,9 @@ fun BalanceDetailScreen(
                 IconButton(
                     onClick = {
                         coroutineScope.launch {
-                            CampusDataProvider.portal.refreshBalance(kind)
+                            CampusDataProvider.sync.requestVisible(edu.neu.campus.app.navigation.AppNavigator.currentTab,
+                                edu.neu.campus.app.navigation.AppNavigator.currentDestination,
+                                edu.neu.campus.app.SyncReason.MANUAL)
                         }
                     },
                     enabled = !isRefreshing
@@ -299,7 +301,9 @@ fun BalanceDetailScreen(
                                 error = balanceSnapshot.error,
                                 onRetry = {
                                     coroutineScope.launch {
-                                        CampusDataProvider.portal.refreshBalance(kind)
+                                        CampusDataProvider.sync.requestVisible(edu.neu.campus.app.navigation.AppNavigator.currentTab,
+                                            edu.neu.campus.app.navigation.AppNavigator.currentDestination,
+                                            edu.neu.campus.app.SyncReason.MANUAL)
                                     }
                                 }
                             )

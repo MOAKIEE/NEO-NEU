@@ -47,7 +47,7 @@ fun SafeDataTag(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val timeStr = TimeFormatter.formatTime(lastSuccessEpochMillis)
+        val timeStr = TimeFormatter.formatDateTime(lastSuccessEpochMillis)
         val text = if (isStale) {
             "来源：$sourceName · 最近同步 $timeStr (旧缓存)"
         } else if (lastSuccessEpochMillis != null) {

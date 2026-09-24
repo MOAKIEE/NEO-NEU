@@ -7,6 +7,11 @@ import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.contract.SessionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -21,6 +26,7 @@ class LocalSession(context: Context) {
     }
     private val preferences = context.applicationContext.getSharedPreferences("session_v1", Context.MODE_PRIVATE)
     private val cookies = CookieManager.getInstance().apply { setAcceptCookie(true) }
+    private val cookieWrites = Mutex()
     private val savedScope = preferences.getString("scope", null)
     private val mutableState = MutableStateFlow(
         SessionState(savedScope,
@@ -31,11 +37,21 @@ class LocalSession(context: Context) {
     private val scopeListeners = mutableListOf<(String?) -> Unit>()
     @Synchronized fun addScopeListener(listener: (String?) -> Unit) { scopeListeners += listener }
 
-    @Synchronized fun beginLogin() {
-        val scope = UUID.randomUUID().toString()
-        preferences.edit().putString("scope", scope).apply()
-        mutableState.value = SessionState(scope, DomainStatus.AUTHENTICATING, DomainStatus.AUTHENTICATING)
-        scopeListeners.forEach { it(scope) }
+    suspend fun beginLogin() = cookieWrites.withLock {
+        synchronized(this) {
+            val scope = UUID.randomUUID().toString()
+            preferences.edit().putString("scope", scope).apply()
+            mutableState.value = SessionState(scope, DomainStatus.AUTHENTICATING, DomainStatus.AUTHENTICATING)
+            scopeListeners.forEach { it(scope) }
+        }
+        // A school account cannot yet be matched across both verified domains.
+        // Quarantine the new scope from every cookie belonging to the previous account.
+        withContext(Dispatchers.Main.immediate) {
+            suspendCancellableCoroutine<Unit> { continuation ->
+                cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
+            }
+            cookies.flush()
+        }
     }
 
     @Synchronized fun mark(domain: Domain, status: DomainStatus) {
@@ -44,6 +60,10 @@ class LocalSession(context: Context) {
             Domain.PORTAL -> old.copy(portal = status)
             Domain.ACADEMIC -> old.copy(academic = status)
         }
+    }
+
+    @Synchronized fun markIfScope(scope: String, domain: Domain, status: DomainStatus) {
+        if (mutableState.value.accountScope == scope) mark(domain, status)
     }
 
     /** Publish both probe results together, unless the scope changed while probing. */
@@ -57,19 +77,41 @@ class LocalSession(context: Context) {
         return old.copy(portal = portal, academic = academic).also { mutableState.value = it }
     }
 
-    fun cookieHeader(url: String): String? = cookies.getCookie(url)?.takeIf { it.isNotBlank() }
-    fun acceptSetCookie(url: String, value: String) {
-        cookies.setCookie(url, value)
-        cookies.flush()
+    suspend fun cookieHeader(url: String): String? = cookieWrites.withLock {
+        withContext(Dispatchers.Main.immediate) { cookies.getCookie(url)?.takeIf { it.isNotBlank() } }
+    }
+
+    /** The callback precedes flush, and the scope is checked under the same write lock as logout. */
+    suspend fun acceptSetCookies(scope: String, url: String, values: List<String>) = cookieWrites.withLock {
+        if (values.isEmpty() || state.value.accountScope != scope) return@withLock
+        withContext(Dispatchers.Main.immediate) {
+            writeCookiesInOrder(values, write = { value ->
+                if (state.value.accountScope != scope) throw CancellationException("Account scope changed")
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    cookies.setCookie(url, value) { if (continuation.isActive) continuation.resume(Unit) }
+                }
+            }, flush = { cookies.flush() })
+        }
+    }
+
+    suspend fun flushCookies() = cookieWrites.withLock {
+        withContext(Dispatchers.Main.immediate) { cookies.flush() }
     }
 
     suspend fun signOut() {
-        suspendCancellableCoroutine<Unit> { continuation ->
-            cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
+        synchronized(this) {
+            preferences.edit().remove("scope").apply()
+            mutableState.value = SessionState(null, DomainStatus.SIGNED_OUT, DomainStatus.SIGNED_OUT)
+            scopeListeners.forEach { it(null) }
         }
-        cookies.flush()
-        preferences.edit().remove("scope").apply()
-        mutableState.value = SessionState(null, DomainStatus.SIGNED_OUT, DomainStatus.SIGNED_OUT)
-        synchronized(this) { scopeListeners.forEach { it(null) } }
+        cookieWrites.withLock {
+            if (state.value.accountScope != null) return@withLock
+            withContext(Dispatchers.Main.immediate) {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
+                }
+                cookies.flush()
+            }
+        }
     }
 }
