@@ -20,9 +20,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,9 +52,7 @@ import edu.neu.campus.contract.SessionState
 import edu.neu.campus.network.SessionProbe
 import edu.neu.campus.session.LocalSession
 import edu.neu.campus.ui.components.CampusCard
-import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusSegmentedControl
-import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
@@ -61,8 +61,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 
 object OfficialLogin {
     fun intent(context: Context, domain: Domain = Domain.PORTAL): Intent =
@@ -270,81 +274,91 @@ private fun LoginScreen(
         modifier = Modifier.fillMaxSize().background(colors.background),
         containerColor = colors.background
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).imePadding().background(colors.background)
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)
+                .imePadding().background(colors.background)
         ) {
-            CampusTopBar(
-                title = "学校登录",
-                subtitle = "在学校官方页面完成认证",
-                onBack = onClose,
-                defaultWindowInsetsPadding = false
-            )
-            Column(
-                modifier = Modifier.fillMaxSize().padding(horizontal = CampusSpacing.screenHorizontal)
-                    .padding(bottom = CampusSpacing.sm),
-                verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
-            ) {
-                CampusCard {
-                    Text("连接状态", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
-                    Spacer(Modifier.height(CampusSpacing.xs))
-                    Row(horizontalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
-                        ConnectionStatus("统一门户", state.portal, Modifier.weight(1f))
-                        ConnectionStatus("教务系统", state.academic, Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(CampusSpacing.xs))
-                    Text(connectionHint(state, hasChecked), fontSize = 12.sp, lineHeight = 18.sp, color = colors.textSecondary)
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("学校官方网页", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.textSecondary)
-                    CampusPill("账号密码仅在学校网页输入")
-                }
-                CampusSegmentedControl(
-                    options = listOf("统一门户", "教务系统"),
-                    selectedIndex = selectedSite,
-                    onSelect = onSelectSite
-                )
-                Box(
-                    modifier = Modifier.fillMaxWidth().weight(1f)
-                        .clip(RoundedCornerShape(CampusShapes.medium))
-                        .background(Color.White)
-                        .border(1.dp, colors.outline, RoundedCornerShape(CampusShapes.medium))
+            val compact = maxHeight < 600.dp
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(56.dp)
+                        .padding(horizontal = CampusSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
-                    if (pageError != null) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().background(Color.White)
-                                .padding(CampusSpacing.md),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(pageError, fontSize = 14.sp, color = colors.warning)
-                            Spacer(Modifier.height(CampusSpacing.md))
-                            Button(onClick = onRetry) { Text("重试打开网页") }
+                    IconButton(onClick = onClose) {
+                        Icon(MiuixIcons.Regular.Back, contentDescription = "返回", tint = colors.textPrimary)
+                    }
+                    Column(modifier = Modifier.padding(start = CampusSpacing.xs)) {
+                        Text("学校登录", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
+                        Text("账号密码仅在学校官方网页输入", fontSize = 11.sp, color = colors.textSecondary)
+                    }
+                }
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = CampusSpacing.screenHorizontal)
+                        .padding(bottom = CampusSpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                ) {
+                    if (!compact) {
+                        CampusCard {
+                            Row(horizontalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
+                                ConnectionStatus("统一门户", state.portal, Modifier.weight(1f))
+                                ConnectionStatus("教务系统", state.academic, Modifier.weight(1f))
+                            }
+                            Spacer(Modifier.height(CampusSpacing.xs))
+                            Text(connectionHint(state, hasChecked), fontSize = 12.sp, lineHeight = 18.sp,
+                                color = colors.textSecondary)
                         }
                     }
-                }
-                if (pageError != null || pageLoading) {
-                    Text(
-                        pageError ?: "正在打开学校网页…",
-                        fontSize = 12.sp,
-                        color = if (pageError != null) colors.warning else colors.textSecondary
+                    CampusSegmentedControl(
+                        options = listOf("统一门户", "教务系统"),
+                        selectedIndex = selectedSite,
+                        onSelect = onSelectSite
                     )
-                }
-                Button(onClick = onCheck, enabled = !checking && !pageLoading, modifier = Modifier.fillMaxWidth()) {
-                    Text(when {
-                        checking -> "正在检查门户与教务…"
-                        state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "检查连接并返回应用"
-                        allowPortalOnly -> "仅连接门户并返回应用"
-                        else -> "完成登录，检查连接"
-                    })
-                }
-                if (resumingSession) {
-                    Text(
-                    "已保留学校会话以尝试恢复连接；本地数据已重新隔离，换号后不会沿用旧缓存。",
-                        fontSize = 11.sp,
-                        color = colors.textTertiary
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                            .clip(RoundedCornerShape(CampusShapes.medium))
+                            .background(Color.White)
+                            .border(1.dp, colors.outline, RoundedCornerShape(CampusShapes.medium))
+                    ) {
+                        AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
+                        if (pageError != null) {
+                            Column(
+                                modifier = Modifier.fillMaxSize().background(Color.White)
+                                    .padding(CampusSpacing.md),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(pageError, fontSize = 14.sp, color = colors.warning)
+                                Spacer(Modifier.height(CampusSpacing.md))
+                                Button(onClick = onRetry) { Text("重试打开网页") }
+                            }
+                        } else if (pageLoading) {
+                            Text(
+                                "正在打开学校网页…",
+                                modifier = Modifier.align(Alignment.TopCenter)
+                                    .clip(RoundedCornerShape(CampusShapes.small))
+                                    .background(colors.surface)
+                                    .padding(horizontal = CampusSpacing.sm, vertical = CampusSpacing.xs),
+                                fontSize = 12.sp,
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+                    Button(onClick = onCheck, enabled = !checking && !pageLoading, modifier = Modifier.fillMaxWidth()) {
+                        Text(when {
+                            checking -> "正在检查门户与教务…"
+                            state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "检查连接并返回应用"
+                            allowPortalOnly -> "仅连接门户并返回应用"
+                            else -> "完成登录，检查连接"
+                        })
+                    }
+                    if (resumingSession && !compact) {
+                        Text(
+                            "已保留学校会话；本地数据已重新隔离，换号后不会沿用旧缓存。",
+                            fontSize = 11.sp,
+                            color = colors.textTertiary
+                        )
+                    }
                 }
             }
         }
