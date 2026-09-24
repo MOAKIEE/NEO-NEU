@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,6 +25,7 @@ import edu.neu.campus.ui.components.rememberSchoolClock
 import edu.neu.campus.ui.components.tapScale
 import edu.neu.campus.ui.theme.CampusMotion
 import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Text
 import java.text.SimpleDateFormat
@@ -86,9 +88,10 @@ fun TimetableGrid(
     if (numbers.isEmpty()) {
         Text(
             text = "暂无可显示的节次信息",
-            modifier = modifier.padding(20.dp),
+            modifier = modifier.fillMaxWidth().padding(CampusSpacing.screenHorizontal),
             color = colors.textSecondary,
-            fontSize = 14.sp
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
         )
         return
     }

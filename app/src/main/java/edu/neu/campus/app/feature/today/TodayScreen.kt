@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -42,14 +42,16 @@ import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import edu.neu.campus.ui.timetable.CourseDetailBottomSheet
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Alarm
 import top.yukonga.miuix.kmp.icon.extended.BankCards
 import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Share
@@ -151,258 +153,276 @@ fun TodayScreen(
             sessionState.portal == DomainStatus.SIGNED_OUT ||
             sessionState.academic == DomainStatus.SIGNED_OUT
     val hasStaleData = timetableSnapshot?.isStale == true || cardSnapshot.isStale
+    val sessionExpired = sessionState.portal == DomainStatus.EXPIRED ||
+            sessionState.academic == DomainStatus.EXPIRED
+    val pageScrollBehavior = MiuixScrollBehavior()
+    val retryCourses: () -> Unit = {
+        coroutineScope.launch {
+            academic.refreshTerms()
+            currentTerm?.let { term ->
+                academic.refreshWeeks(term.id)
+                currentWeek?.let { academic.refreshTimetable(term.id, it.number) }
+            }
+        }
+    }
+    val weekText = currentWeek?.number?.let { " · 第 $it 教学周" }.orEmpty()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.screenTop),
-        verticalArrangement = Arrangement.spacedBy(CampusSpacing.lg)
+            .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
-        // 1. 顶部标题区
-        TodayHeader(
-            dateText = todayDateStr,
-            weekNumber = currentWeek?.number,
-            hasUnreadMessage = hasUnreadMessage,
-            onMessagesClick = { AppNavigator.navigateTo(AppDestination.Messages) }
+        // 1. 顶部标题区：与其它 Tab 共用 Miuix 折叠标题栏，大标题位置、字号和收起行为保持一致。
+        CampusTopBar(
+            title = "今日",
+            subtitle = "$todayDateStr$weekText",
+            scrollBehavior = pageScrollBehavior,
+            actions = {
+                MessagesAction(
+                    hasUnreadMessage = hasUnreadMessage,
+                    onClick = { AppNavigator.navigateTo(AppDestination.Messages) }
+                )
+            }
         )
 
-        // 2. 状态提示
-        AnimatedVisibility(
-            visible = sessionBroken,
-            enter = fadeIn(tween(CampusMotion.Duration.medium)) +
-                expandVertically(tween(CampusMotion.Duration.long, easing = CampusMotion.Easing.emphasizedDecelerate)),
-            exit = fadeOut(tween(CampusMotion.Duration.short)) + shrinkVertically(tween(CampusMotion.Duration.medium))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = CampusSpacing.screenHorizontal)
+                .padding(top = CampusSpacing.xs, bottom = CampusSpacing.xxl),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.lg)
         ) {
-            SessionExpiredBanner(onLoginClick = onLoginClick)
-        }
-        AnimatedVisibility(
-            visible = !sessionBroken && hasStaleData,
-            enter = fadeIn(tween(CampusMotion.Duration.medium)) +
-                expandVertically(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)),
-            exit = fadeOut(tween(CampusMotion.Duration.short)) + shrinkVertically(tween(CampusMotion.Duration.short))
-        ) {
-            StaleDataHint()
-        }
+            // 2. 状态提示
+            AnimatedVisibility(
+                visible = sessionBroken,
+                enter = fadeIn(tween(CampusMotion.Duration.medium)) +
+                    expandVertically(tween(CampusMotion.Duration.long, easing = CampusMotion.Easing.emphasizedDecelerate)),
+                exit = fadeOut(tween(CampusMotion.Duration.short)) + shrinkVertically(tween(CampusMotion.Duration.medium))
+            ) {
+                SessionExpiredBanner(expired = sessionExpired, onLoginClick = onLoginClick)
+            }
+            AnimatedVisibility(
+                visible = !sessionBroken && hasStaleData,
+                enter = fadeIn(tween(CampusMotion.Duration.medium)) +
+                    expandVertically(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)),
+                exit = fadeOut(tween(CampusMotion.Duration.short)) + shrinkVertically(tween(CampusMotion.Duration.short))
+            ) {
+                StaleDataHint()
+            }
 
-        // 3. 品牌主课程卡
-        HeroCourseCard(
-            courses = todayCourses,
-            nowTimeStr = nowTimeStr,
-            isLoading = (termsSnapshot.phase == QueryPhase.LOADING || weeksSnapshot?.phase == QueryPhase.LOADING || timetableSnapshot?.phase == QueryPhase.LOADING) && timetableSnapshot?.data == null,
-            error = timetableSnapshot?.error ?: weeksSnapshot?.error ?: termsSnapshot.error,
-            isStale = timetableSnapshot?.isStale ?: false,
-            hasConfirmedTerm = currentTerm != null && currentWeek != null,
-            hasData = timetableSnapshot?.data != null,
-            onClickCourse = { inspectingCourse = it },
-            onConflictClick = { conflictCourses = it },
-            onGotoTimetable = { AppNavigator.navigateToTab(MainTab.TIMETABLE) },
-            onRetry = {
-                coroutineScope.launch {
-                    academic.refreshTerms()
-                    currentTerm?.let { term ->
-                        academic.refreshWeeks(term.id)
-                        currentWeek?.let { academic.refreshTimetable(term.id, it.number) }
+            // 3. 品牌主课程卡
+            HeroCourseCard(
+                courses = todayCourses,
+                nowTimeStr = nowTimeStr,
+                isLoading = (termsSnapshot.phase == QueryPhase.LOADING || weeksSnapshot?.phase == QueryPhase.LOADING || timetableSnapshot?.phase == QueryPhase.LOADING) && timetableSnapshot?.data == null,
+                error = timetableSnapshot?.error ?: weeksSnapshot?.error ?: termsSnapshot.error,
+                isStale = timetableSnapshot?.isStale ?: false,
+                hasConfirmedTerm = currentTerm != null && currentWeek != null,
+                hasData = timetableSnapshot?.data != null,
+                onClickCourse = { inspectingCourse = it },
+                onConflictClick = { conflictCourses = it },
+                onGotoTimetable = { AppNavigator.navigateToTab(MainTab.TIMETABLE) },
+                // 会话失效时顶部横幅已给出登录入口，主卡不再放一个必然失败的「重试」。
+                onRetry = retryCourses.takeUnless { sessionBroken }
+            )
+
+            // 4. 快捷入口
+            QuickActionRow(
+                compact = compact,
+                onNavigate = { featureId ->
+                    when (featureId) {
+                        FeatureRegistry.ID_GRADES -> AppNavigator.navigateTo(AppDestination.Grades)
+                        FeatureRegistry.ID_EXAMS -> AppNavigator.navigateTo(AppDestination.Exams)
+                        FeatureRegistry.ID_CAMPUS_CARD -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD))
+                        FeatureRegistry.ID_NETWORK -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK))
+                        FeatureRegistry.ID_MESSAGES -> AppNavigator.navigateTo(AppDestination.Messages)
+                        FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.Tasks)
+                        else -> AppNavigator.navigateToTab(MainTab.QUERY)
                     }
                 }
-            }
-        )
+            )
 
-        // 4. 快捷入口
-        QuickActionRow(
-            compact = compact,
-            onNavigate = { featureId ->
-                when (featureId) {
-                    FeatureRegistry.ID_GRADES -> AppNavigator.navigateTo(AppDestination.Grades)
-                    FeatureRegistry.ID_EXAMS -> AppNavigator.navigateTo(AppDestination.Exams)
-                    FeatureRegistry.ID_CAMPUS_CARD -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD))
-                    FeatureRegistry.ID_NETWORK -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK))
-                    FeatureRegistry.ID_MESSAGES -> AppNavigator.navigateTo(AppDestination.Messages)
-                    FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.Tasks)
-                    else -> AppNavigator.navigateToTab(MainTab.QUERY)
-                }
-            }
-        )
-
-        // 5. 可配置摘要模块区
-        HomeLayoutConfigManager.modules.filter { it.enabled }.forEachIndexed { moduleIndex, module ->
-            when (module.id) {
-                HomeLayoutConfigManager.MODULE_TODAY_COURSES -> {
-                    StaggeredAppear(index = moduleIndex) {
-                        CampusSection(
-                            title = "今日课程",
-                            actionText = "完整课表",
-                            onActionClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
-                        ) {
-                            if (timetableSnapshot?.data == null) {
-                                CampusCard {
-                                    LoadStatePanel(
-                                        isLoading = timetableSnapshot?.phase == QueryPhase.LOADING,
-                                        error = timetableSnapshot?.error ?: weeksSnapshot?.error ?: termsSnapshot.error,
-                                        emptyMessage = "尚未获取已确认教学周的课程"
+            // 5. 可配置摘要模块区
+            HomeLayoutConfigManager.modules.filter { it.enabled }.forEachIndexed { moduleIndex, module ->
+                when (module.id) {
+                    HomeLayoutConfigManager.MODULE_TODAY_COURSES -> {
+                        StaggeredAppear(index = moduleIndex) {
+                            CampusSection(
+                                title = "今日课程",
+                                actionText = "完整课表",
+                                onActionClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
+                            ) {
+                                if (timetableSnapshot?.data == null && timetableSnapshot?.phase == QueryPhase.LOADING) {
+                                    CampusCard { LoadStatePanel(isLoading = true) }
+                                } else if (timetableSnapshot?.data == null) {
+                                    // 没有课表时，原因（失败、教学周待确认、未同步）与操作已在主卡展示，
+                                    // 这里只占位，避免同一状态出现两张状态卡。
+                                    CampusCard {
+                                        CampusEmptyHint(text = "课程同步后在此按时间显示")
+                                    }
+                                } else {
+                                    CourseTimeline(
+                                        courses = todayCourses,
+                                        trusted = !timetableSnapshot.isStale,
+                                        nowTimeStr = nowTimeStr,
+                                        onCourseClick = { inspectingCourse = it },
+                                        onSeeAllClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
                                     )
                                 }
-                            } else {
-                                CourseTimeline(
-                                    courses = todayCourses,
-                                    trusted = !timetableSnapshot.isStale,
-                                    nowTimeStr = nowTimeStr,
-                                    onCourseClick = { inspectingCourse = it },
-                                    onSeeAllClick = { AppNavigator.navigateToTab(MainTab.TIMETABLE) }
-                                )
                             }
                         }
                     }
-                }
 
-                HomeLayoutConfigManager.MODULE_CAMPUS_LIFE -> {
-                    StaggeredAppear(index = moduleIndex) {
-                        CampusSection(
-                            title = "校园生活",
-                            actionText = if (hideBalance) "显示余额" else "隐藏余额",
-                            onActionClick = { BalancePrivacyManager.toggleMasked() }
-                        ) {
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                maxItemsInEachRow = if (compact) 1 else 2,
-                                verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm),
-                                horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
-                            ) {
-                                BalanceSummaryCard(
-                                    title = "校园卡",
-                                    icon = MiuixIcons.Regular.BankCards,
-                                    balanceValue = cardSnapshot.data?.rawValue,
-                                    serverMasked = cardSnapshot.data?.isMasked == true,
-                                    stateError = cardSnapshot.error?.message,
-                                    stale = cardSnapshot.isStale,
-                                    lastSuccessEpochMillis = cardSnapshot.lastSuccessEpochMillis,
-                                    isMasked = hideBalance,
-                                    accent = colors.cardForeground,
-                                    container = colors.cardContainer,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD)) }
-                                )
-
-                                BalanceSummaryCard(
-                                    title = "网费",
-                                    icon = MiuixIcons.Regular.Share,
-                                    balanceValue = netSnapshot.data?.rawValue,
-                                    serverMasked = netSnapshot.data?.isMasked == true,
-                                    stateError = netSnapshot.error?.message,
-                                    stale = netSnapshot.isStale,
-                                    lastSuccessEpochMillis = netSnapshot.lastSuccessEpochMillis,
-                                    isMasked = hideBalance,
-                                    accent = colors.networkForeground,
-                                    container = colors.networkContainer,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK)) }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                HomeLayoutConfigManager.MODULE_RECENT_EXAMS -> {
-                    val exams = examsSnapshot?.data.orEmpty()
-                    if (exams.isNotEmpty()) {
+                    HomeLayoutConfigManager.MODULE_CAMPUS_LIFE -> {
                         StaggeredAppear(index = moduleIndex) {
                             CampusSection(
-                                title = "考试摘要",
-                                actionText = "查看全部",
-                                onActionClick = { AppNavigator.navigateTo(AppDestination.Exams) }
+                                title = "校园生活",
+                                actionText = if (hideBalance) "显示余额" else "隐藏余额",
+                                onActionClick = { BalancePrivacyManager.toggleMasked() }
                             ) {
-                                val upcoming = exams.firstOrNull { it.arranged } ?: exams.first()
-                                CampusCard(
-                                    onClick = { AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, upcoming)) }
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxItemsInEachRow = if (compact) 1 else 2,
+                                    verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm),
+                                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        ) {
+                                    BalanceSummaryCard(
+                                        title = "校园卡",
+                                        icon = MiuixIcons.Regular.BankCards,
+                                        balanceValue = cardSnapshot.data?.rawValue,
+                                        serverMasked = cardSnapshot.data?.isMasked == true,
+                                        stateError = cardSnapshot.error?.message,
+                                        stale = cardSnapshot.isStale,
+                                        lastSuccessEpochMillis = cardSnapshot.lastSuccessEpochMillis,
+                                        isMasked = hideBalance,
+                                        accent = colors.cardForeground,
+                                        container = colors.cardContainer,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD)) }
+                                    )
+
+                                    BalanceSummaryCard(
+                                        title = "网费",
+                                        icon = MiuixIcons.Regular.Share,
+                                        balanceValue = netSnapshot.data?.rawValue,
+                                        serverMasked = netSnapshot.data?.isMasked == true,
+                                        stateError = netSnapshot.error?.message,
+                                        stale = netSnapshot.isStale,
+                                        lastSuccessEpochMillis = netSnapshot.lastSuccessEpochMillis,
+                                        isMasked = hideBalance,
+                                        accent = colors.networkForeground,
+                                        container = colors.networkContainer,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK)) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HomeLayoutConfigManager.MODULE_RECENT_EXAMS -> {
+                        val exams = examsSnapshot?.data.orEmpty()
+                        if (exams.isNotEmpty()) {
+                            StaggeredAppear(index = moduleIndex) {
+                                CampusSection(
+                                    title = "考试摘要",
+                                    actionText = "查看全部",
+                                    onActionClick = { AppNavigator.navigateTo(AppDestination.Exams) }
+                                ) {
+                                    val upcoming = exams.firstOrNull { it.arranged } ?: exams.first()
+                                    CampusCard(
+                                        onClick = { AppNavigator.navigateTo(AppDestination.ExamDetail(currentTerm!!.id, upcoming)) }
+                                    ) {
                                         Row(
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
-                                        ) {
-                                            CampusIconBadge(
-                                                icon = MiuixIcons.Regular.Alarm,
-                                                tint = colors.examForeground,
-                                                container = colors.examContainer
+                                            ) {
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                                            ) {
+                                                CampusIconBadge(
+                                                    icon = MiuixIcons.Regular.Alarm,
+                                                    tint = colors.examForeground,
+                                                    container = colors.examContainer
+                                                )
+                                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    Text(
+                                                        text = upcoming.courseName,
+                                                        fontSize = 16.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = colors.textPrimary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = "${upcoming.timeDescription ?: "时间待定"} · ${upcoming.place ?: "地点未提供"}",
+                                                        fontSize = 12.sp,
+                                                        color = colors.textSecondary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                            CampusPill(
+                                                text = if (upcoming.arranged) "已排考" else "待排考",
+                                                contentColor = colors.examForeground,
+                                                containerColor = colors.examContainer
                                             )
-                                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                                Text(
-                                                    text = upcoming.courseName,
-                                                    fontSize = 16.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = colors.textPrimary,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    text = "${upcoming.timeDescription ?: "时间待定"} · ${upcoming.place ?: "地点未提供"}",
-                                                    fontSize = 12.sp,
-                                                    color = colors.textSecondary,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                                        }
+                                    }
+                                    if (examsSnapshot?.error != null) {
+                                        Spacer(modifier = Modifier.height(CampusSpacing.xs))
+                                        SafeDataTag(text = "考试更新失败：${examsSnapshot.error?.message}")
+                                    } else if (examsSnapshot?.isStale == true) {
+                                        Spacer(modifier = Modifier.height(CampusSpacing.xs))
+                                        SafeDataTag(text = "考试摘要为上次同步数据")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HomeLayoutConfigManager.MODULE_RECENT_TASKS -> {
+                        val tasks = tasksSnapshot.data?.items.orEmpty()
+                        if (tasks.isNotEmpty()) {
+                            StaggeredAppear(index = moduleIndex) {
+                                CampusSection(
+                                    title = "待办事项 (${tasksSnapshot.data?.total ?: tasks.size})",
+                                    actionText = "查看列表",
+                                    onActionClick = { AppNavigator.navigateTo(AppDestination.Tasks) }
+                                ) {
+                                    CampusGroup {
+                                        tasks.take(2).forEachIndexed { idx, t ->
+                                            CampusRow(
+                                                title = t.title,
+                                                leading = {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(colors.messageForeground)
+                                                    )
+                                                },
+                                                showChevron = true,
+                                                onClick = { AppNavigator.navigateTo(AppDestination.Tasks) }
+                                            )
+                                            if (idx < tasks.take(2).lastIndex) {
+                                                CampusGroupDivider(startIndent = 20.dp)
                                             }
                                         }
-                                        CampusPill(
-                                            text = if (upcoming.arranged) "已排考" else "待排考",
-                                            contentColor = colors.examForeground,
-                                            containerColor = colors.examContainer
-                                        )
                                     }
-                                }
-                                if (examsSnapshot?.error != null) {
-                                    Spacer(modifier = Modifier.height(CampusSpacing.xs))
-                                    SafeDataTag(text = "考试更新失败：${examsSnapshot.error?.message}")
-                                } else if (examsSnapshot?.isStale == true) {
-                                    Spacer(modifier = Modifier.height(CampusSpacing.xs))
-                                    SafeDataTag(text = "考试摘要为上次同步数据")
-                                }
-                            }
-                        }
-                    }
-                }
-
-                HomeLayoutConfigManager.MODULE_RECENT_TASKS -> {
-                    val tasks = tasksSnapshot.data?.items.orEmpty()
-                    if (tasks.isNotEmpty()) {
-                        StaggeredAppear(index = moduleIndex) {
-                            CampusSection(
-                                title = "待办事项 (${tasksSnapshot.data?.total ?: tasks.size})",
-                                actionText = "查看列表",
-                                onActionClick = { AppNavigator.navigateTo(AppDestination.Tasks) }
-                            ) {
-                                CampusGroup {
-                                    tasks.take(2).forEachIndexed { idx, t ->
-                                        CampusRow(
-                                            title = t.title,
-                                            leading = {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(8.dp)
-                                                        .clip(CircleShape)
-                                                        .background(colors.messageForeground)
-                                                )
-                                            },
-                                            showChevron = true,
-                                            onClick = { AppNavigator.navigateTo(AppDestination.Tasks) }
-                                        )
-                                        if (idx < tasks.take(2).lastIndex) {
-                                            CampusGroupDivider(startIndent = 20.dp)
-                                        }
+                                    if (tasksSnapshot.error != null) {
+                                        Spacer(modifier = Modifier.height(CampusSpacing.xs))
+                                        SafeDataTag(text = "待办更新失败：${tasksSnapshot.error?.message}")
+                                    } else if (tasksSnapshot.isStale) {
+                                        Spacer(modifier = Modifier.height(CampusSpacing.xs))
+                                        SafeDataTag(text = "待办摘要为上次同步数据")
                                     }
-                                }
-                                if (tasksSnapshot.error != null) {
-                                    Spacer(modifier = Modifier.height(CampusSpacing.xs))
-                                    SafeDataTag(text = "待办更新失败：${tasksSnapshot.error?.message}")
-                                } else if (tasksSnapshot.isStale) {
-                                    Spacer(modifier = Modifier.height(CampusSpacing.xs))
-                                    SafeDataTag(text = "待办摘要为上次同步数据")
                                 }
                             }
                         }
@@ -410,8 +430,6 @@ fun TodayScreen(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(CampusSpacing.md))
     }
 
     // 冲突课程选择抽屉
@@ -420,14 +438,12 @@ fun TodayScreen(
             show = true,
             title = "课程列表 (${conflicts.size} 项)",
             onDismissRequest = { conflictCourses = null },
-            endAction = {
-                Button(onClick = { conflictCourses = null }) { Text("关闭") }
-            }
+            startAction = { CampusSheetCloseAction(onClick = { conflictCourses = null }) }
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(CampusSpacing.md),
+                    .padding(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
                 Text(
@@ -488,53 +504,23 @@ fun TodayScreen(
     }
 }
 
+/** 未读圆点直径。 */
+private val UnreadDotSize = 8.dp
+
 /**
- * 首页顶部标题区：大标题 + 日期教学周 + 消息按钮（未读圆点带呼吸）。
+ * 标题栏右侧的消息入口：Miuix 标准 40dp 图标按钮，未读时在图标右上角叠加圆点。
  */
 @Composable
-private fun TodayHeader(
-    dateText: String,
-    weekNumber: Int?,
+private fun MessagesAction(
     hasUnreadMessage: Boolean,
-    onMessagesClick: () -> Unit
+    onClick: () -> Unit
 ) {
-    val colors = CampusTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(
-                text = "今日",
-                fontSize = 30.sp,
-                lineHeight = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary
-            )
-            val weekText = if (weekNumber != null) " · 第 $weekNumber 教学周" else ""
-            Text(
-                text = "$dateText$weekText",
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                color = colors.textSecondary,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .tapScale(onClick = onMessagesClick, pressedScale = 0.92f, clipShape = CircleShape)
-                .background(colors.surface)
-                .border(1.dp, colors.outlineVariant, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
+    IconButton(onClick = onClick) {
+        Box {
             Icon(
                 imageVector = MiuixIcons.Regular.Messages,
-                contentDescription = "消息中心",
-                tint = colors.textPrimary,
-                modifier = Modifier.size(23.dp)
+                contentDescription = if (hasUnreadMessage) "消息中心，有未读消息" else "消息中心",
+                tint = CampusTheme.colors.textPrimary
             )
             UnreadDot(
                 visible = hasUnreadMessage,
@@ -561,62 +547,59 @@ private fun UnreadDot(
     ) {
         Box(
             modifier = Modifier
-                .offset(x = (-9).dp, y = 9.dp)
-                .size(9.dp)
+                .size(UnreadDotSize)
                 .clip(CircleShape)
                 .background(colors.error)
         )
     }
 }
 
-/** 会话失效提示条。 */
+/**
+ * 会话失效提示条。
+ *
+ * 内边距与 [CampusCard] 一致（左右 md），图标与卡片内容同一起点；
+ * 文案区分「登录过期」与「尚未登录」，按钮使用紧凑主按钮并与文字垂直居中。
+ */
 @Composable
-private fun SessionExpiredBanner(onLoginClick: () -> Unit) {
+private fun SessionExpiredBanner(expired: Boolean, onLoginClick: () -> Unit) {
     val colors = CampusTheme.colors
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(CampusShapes.medium))
             .background(colors.errorContainer)
-            .padding(CampusSpacing.sm + 2.dp)
+            .padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        CampusIconBadge(
+            icon = MiuixIcons.Regular.Lock,
+            tint = colors.error,
+            container = colors.error.copy(alpha = 0.14f),
+            size = 38.dp,
+            iconSize = 20.dp,
+            cornerRadius = CampusShapes.extraSmall
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
-            ) {
-                CampusIconBadge(
-                    icon = MiuixIcons.Regular.Alarm,
-                    tint = colors.error,
-                    container = colors.error.copy(alpha = 0.14f),
-                    size = 38.dp,
-                    iconSize = 20.dp,
-                    cornerRadius = CampusShapes.extraSmall
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "学校账号需要重新认证",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.onErrorContainer
-                    )
-                    Text(
-                        text = "登录已过期，请重新登录以获取最新课表",
-                        fontSize = 12.sp,
-                        color = colors.textSecondary
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(CampusSpacing.xs))
-            Button(onClick = onLoginClick) {
-                Text("登录", fontSize = 14.sp)
-            }
+            Text(
+                text = if (expired) "学校账号登录已过期" else "尚未登录学校账号",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.onErrorContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (expired) "重新登录后即可同步最新数据" else "登录后即可查看课表与校园信息",
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = colors.textSecondary
+            )
         }
+        CampusButton(text = "登录", onClick = onLoginClick, primary = true)
     }
 }
 
@@ -629,7 +612,7 @@ private fun StaleDataHint() {
             .fillMaxWidth()
             .clip(RoundedCornerShape(CampusShapes.extraSmall))
             .background(colors.surfaceMuted)
-            .padding(horizontal = CampusSpacing.sm + 2.dp, vertical = CampusSpacing.xs)
+            .padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs)
     ) {
         Text(
             text = "当前包含上次同步的数据，请留意各项同步时间",
@@ -682,9 +665,11 @@ private fun QuickActionRow(
     ) {
         items.forEachIndexed { index, item ->
             StaggeredAppear(index = index, modifier = Modifier.weight(1f)) {
+                // StaggeredAppear 内部是默认左上对齐的 Box，条目需撑满等分列才能水平居中。
                 QuickActionItem(
                     item = item,
-                    onClick = { onNavigate(item.id) }
+                    onClick = { onNavigate(item.id) },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }

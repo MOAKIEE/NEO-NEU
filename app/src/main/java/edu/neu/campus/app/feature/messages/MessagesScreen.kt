@@ -22,6 +22,7 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.CampusMessage
 import edu.neu.campus.contract.QueryPhase
+import edu.neu.campus.ui.components.CampusButton
 import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusFilterChip
 import edu.neu.campus.ui.components.CampusIconBadge
@@ -57,7 +58,8 @@ enum class MessageStatusFilter(val label: String) {
 @Composable
 fun MessagesScreen(
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLoginClick: (() -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val colors = CampusTheme.colors
@@ -159,18 +161,21 @@ fun MessagesScreen(
             )
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = CampusSpacing.screenHorizontal),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            top.yukonga.miuix.kmp.basic.Button(onClick = { page-- }, enabled = page > 1 && !isRefreshing) { Text("上一页") }
-            Text("第 $page 页 · 门户", fontSize = 13.sp, color = colors.textSecondary)
-            val total = messagesSnapshot.data?.total
-            val hasNext = if (total != null) page * 30 < total else allMessages.size == 30
-            top.yukonga.miuix.kmp.basic.Button(onClick = { page++ }, enabled = hasNext && !isRefreshing) { Text("下一页") }
+        // 翻页条：只有拿到消息（或已翻到后面的页）时才显示，避免错误/加载状态上方悬着两个灰按钮。
+        if (allMessages.isNotEmpty() || page > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xxs),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CampusButton(text = "上一页", onClick = { page-- }, enabled = page > 1 && !isRefreshing)
+                Text("第 $page 页 · 门户", fontSize = 13.sp, color = colors.textSecondary)
+                val total = messagesSnapshot.data?.total
+                val hasNext = if (total != null) page * 30 < total else allMessages.size == 30
+                CampusButton(text = "下一页", onClick = { page++ }, enabled = hasNext && !isRefreshing)
+            }
         }
         if (messagesSnapshot.isStale) {
             Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal)) {
@@ -195,7 +200,8 @@ fun MessagesScreen(
                             coroutineScope.launch {
                                 CampusDataProvider.portal.refreshMessages(page, 30, status)
                             }
-                        }
+                        },
+                        onLogin = onLoginClick
                     )
                 }
                 filteredMessages.isEmpty() -> {
@@ -207,7 +213,12 @@ fun MessagesScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(CampusSpacing.md),
+                        contentPadding = PaddingValues(
+                            start = CampusSpacing.screenHorizontal,
+                            end = CampusSpacing.screenHorizontal,
+                            top = CampusSpacing.xs,
+                            bottom = CampusSpacing.screenBottom
+                        ),
                         verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs + 2.dp)
                     ) {
                         itemsIndexed(filteredMessages, key = { _, item -> item.id }) { index, msg ->

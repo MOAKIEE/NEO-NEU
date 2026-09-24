@@ -116,4 +116,10 @@ object CampusSpacing {
 
     /** 滚动内容底部补白，避免被底栏遮挡。 */
     val screenBottom: Dp = 28.dp
+
+    /**
+     * 底部抽屉内容的左右缩进。Miuix 抽屉自带约 24dp 内边距，
+     * 再缩进 8dp 后内容左缘与标题栏关闭按钮对齐，不要再叠加 [screenHorizontal]。
+     */
+    val sheetHorizontal: Dp = 8.dp
 }

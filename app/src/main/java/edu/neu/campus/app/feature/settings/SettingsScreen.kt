@@ -28,7 +28,6 @@ import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import edu.neu.campus.ui.theme.ThemeManager
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -63,10 +62,8 @@ fun SettingsScreen(
         modifier = modifier.fillMaxSize().background(colors.background)
             .nestedScroll(pageScrollBehavior.nestedScrollConnection)
     ) {
-        // MainScreen 已应用 Scaffold 的系统栏 padding；此处不能重复添加窗口边距。
         CampusTopBar(
             title = "我的",
-            defaultWindowInsetsPadding = false,
             scrollBehavior = pageScrollBehavior
         )
         Column(
@@ -106,10 +103,14 @@ fun SettingsScreen(
                 Spacer(Modifier.height(CampusSpacing.xs))
                 DomainStatusRow("统一门户", sessionState.portal)
                 DomainStatusRow("教务系统", sessionState.academic)
-                Spacer(Modifier.height(CampusSpacing.xs))
-                Button(onClick = onLoginClick, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (fullyConnected) "重新认证学校账号" else "登录学校账号")
-                }
+                Spacer(Modifier.height(CampusSpacing.sm))
+                CampusButton(
+                    text = if (fullyConnected) "重新认证学校账号" else "登录学校账号",
+                    onClick = onLoginClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    primary = !fullyConnected
+                )
+                Spacer(Modifier.height(CampusSpacing.xxs))
                 CampusRow(
                     title = if (checkingConnection) "正在检查连接…" else "检查连接",
                     subtitle = "检查统一门户与教务查询是否可用",
@@ -156,7 +157,7 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    CampusGroupDivider(startIndent = 50.dp)
+                    CampusGroupDivider(startIndent = SettingsTextIndent)
                     CampusRow(
                         title = "首页布局",
                         subtitle = "快捷入口与展示模块",
@@ -180,7 +181,7 @@ fun SettingsScreen(
                             )
                         }
                     )
-                    CampusGroupDivider(startIndent = 50.dp)
+                    CampusGroupDivider(startIndent = SettingsTextIndent)
                     CampusRow(
                         title = "退出并清除本地数据",
                         subtitle = "清除学校会话与当前账号缓存",
@@ -191,7 +192,6 @@ fun SettingsScreen(
                 }
                 Text(
                     text = "查询记录保存在本机，离线时仍可查看。",
-                    modifier = Modifier.padding(horizontal = CampusSpacing.xs),
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
                     color = colors.textSecondary
@@ -207,14 +207,20 @@ fun SettingsScreen(
                 )
                 AnimatedVisibility(visible = showAbout) {
                     Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)) {
-                        CampusGroupDivider(startIndent = 50.dp)
-                        Text("版本：1.0.0", fontSize = 13.sp, color = colors.textPrimary)
-                        Text(
-                            "登录通过学校官方页面完成，本应用不保存你的密码。\n仅提供信息查询，不选课、不支付、不提交申请。",
-                            fontSize = 12.sp,
-                            lineHeight = 20.sp,
-                            color = colors.textSecondary
-                        )
+                        CampusGroupDivider(startIndent = SettingsTextIndent)
+                        // 说明文字与上方行标题同一起点，不再缩回到图标下方。
+                        Column(
+                            modifier = Modifier.padding(start = SettingsTextIndent, bottom = CampusSpacing.xs),
+                            verticalArrangement = Arrangement.spacedBy(CampusSpacing.xxs)
+                        ) {
+                            Text("版本：1.0.0", fontSize = 13.sp, color = colors.textPrimary)
+                            Text(
+                                "登录通过学校官方页面完成，本应用不保存你的密码。\n仅提供信息查询，不选课、不支付、不提交申请。",
+                                fontSize = 12.sp,
+                                lineHeight = 20.sp,
+                                color = colors.textSecondary
+                            )
+                        }
                     }
                 }
             }
@@ -227,8 +233,16 @@ fun SettingsScreen(
         summary = "将退出学校账号，清除本机学校会话和当前账号查询缓存。不会修改学校数据；再次查询需要重新登录。",
         onDismissRequest = { if (!signingOut) showSignOutConfirm = false }
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)) {
-            Button(
+        // 与 Miuix 对话框一致：取消在左、确认在右，两个按钮等宽并排。
+        Row(horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)) {
+            CampusButton(
+                text = "取消",
+                onClick = { showSignOutConfirm = false },
+                modifier = Modifier.weight(1f),
+                enabled = !signingOut
+            )
+            CampusButton(
+                text = if (signingOut) "正在清除…" else "退出并清除",
                 onClick = {
                     if (!signingOut) {
                         signingOut = true
@@ -243,17 +257,19 @@ fun SettingsScreen(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
+                primary = true,
                 enabled = !signingOut
-            ) { Text(if (signingOut) "正在清除…" else "退出并清除") }
-            Button(
-                onClick = { showSignOutConfirm = false },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !signingOut
-            ) { Text("取消") }
+            )
         }
     }
 }
+
+/** 设置项图标尺寸。 */
+private val SettingsIconSize = 38.dp
+
+/** 设置项标题相对卡片内容的起点：图标宽度加 [CampusRow] 的图文间距，分隔线与说明文字都对齐到这里。 */
+private val SettingsTextIndent = SettingsIconSize + CampusSpacing.sm
 
 /** 本页使用中性色图标，只在账号和连接状态上强调颜色。 */
 @Composable
@@ -262,7 +278,7 @@ private fun SettingsIcon(icon: ImageVector) {
         icon = icon,
         tint = CampusTheme.colors.textSecondary,
         container = CampusTheme.colors.surfaceMuted,
-        size = 38.dp,
+        size = SettingsIconSize,
         iconSize = 20.dp,
         cornerRadius = CampusShapes.extraSmall
     )
@@ -271,9 +287,9 @@ private fun SettingsIcon(icon: ImageVector) {
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)) {
+        // 分组标题与页面大标题、卡片左缘同在 screenHorizontal 起点，不再额外内缩。
         Text(
             title,
-            modifier = Modifier.padding(horizontal = CampusSpacing.xs),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             color = CampusTheme.colors.textSecondary

@@ -125,10 +125,8 @@ fun BalanceDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(
-                    horizontal = CampusSpacing.md,
-                    vertical = CampusSpacing.sm
-                ),
+                .padding(horizontal = CampusSpacing.screenHorizontal)
+                .padding(top = CampusSpacing.xs, bottom = CampusSpacing.screenBottom),
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
         ) {
             CampusPageEnter {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -59,10 +60,14 @@ fun CampusGroup(
     }
 }
 
+/** 区块操作文字的触控留白；再以等量反向位移抵消，让文字右缘与卡片右缘对齐。 */
+private val SectionActionInset = CampusSpacing.xs
+
 /**
  * 带有外部标题和右侧操作按钮的标准区块包装。
  *
  * 标题位于卡片外部，保持 Miuix 的「小标题 + 分组」信息层级。
+ * 标题左缘、操作文字右缘都与下方卡片边缘对齐，不再额外缩进。
  */
 @Composable
 fun CampusSection(
@@ -79,9 +84,7 @@ fun CampusSection(
         verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs + 2.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -106,8 +109,9 @@ fun CampusSection(
             if (actionText != null && onActionClick != null) {
                 Box(
                     modifier = Modifier
+                        .offset(x = SectionActionInset)
                         .tapScale(onClick = onActionClick, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.pill))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = SectionActionInset, vertical = CampusSpacing.xxs)
                 ) {
                     Text(
                         text = actionText,

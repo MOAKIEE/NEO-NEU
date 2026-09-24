@@ -54,7 +54,8 @@ import top.yukonga.miuix.kmp.icon.extended.Tasks
 @Composable
 fun TasksScreen(
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLoginClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -105,14 +106,18 @@ fun TasksScreen(
             }
         )
 
-        if (tasksSnapshot.isStale) SafeDataTag(text = "显示上次同步待办，可能已变化")
+        if (tasksSnapshot.isStale) {
+            Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xxs)) {
+                SafeDataTag(text = "显示上次同步待办，可能已变化")
+            }
+        }
 
         // 分段切换：待办事项 / 已办事项 / 我的申请
         CampusSegmentedControl(
             options = taskTabs.map { it.second },
             selectedIndex = taskTabs.indexOfFirst { it.first == activeTab }.coerceAtLeast(0),
             onSelect = { index -> activeTab = taskTabs[index].first },
-            modifier = Modifier.padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs)
+            modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs)
         )
 
         // 内容展示区
@@ -142,7 +147,8 @@ fun TasksScreen(
                             coroutineScope.launch {
                                 CampusDataProvider.portal.refreshTasks(kind = activeTab, page = 1, pageSize = 20)
                             }
-                        }
+                        },
+                        onLogin = onLoginClick
                     )
                 }
 
@@ -161,7 +167,12 @@ fun TasksScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(CampusSpacing.md),
+                        contentPadding = PaddingValues(
+                            start = CampusSpacing.screenHorizontal,
+                            end = CampusSpacing.screenHorizontal,
+                            top = CampusSpacing.xs,
+                            bottom = CampusSpacing.screenBottom
+                        ),
                         verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                     ) {
                         itemsIndexed(taskList, key = { _, task -> task.id }) { index, task ->
@@ -278,7 +289,7 @@ private fun SchemaChangedCard(context: Context) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(CampusSpacing.md),
+            .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs),
         verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
     ) {
         CampusCard(contentPadding = PaddingValues(CampusSpacing.lg)) {

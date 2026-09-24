@@ -12,7 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,7 +24,7 @@ import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
+import top.yukonga.miuix.kmp.icon.basic.ArrowUpDown
 
 /**
  * 顶部筛选胶囊 (CampusFilterChip)。
@@ -66,13 +68,47 @@ fun CampusFilterChip(
                 color = colors.brand
             )
         }
-        Icon(
-            imageVector = MiuixIcons.Regular.ExpandMore,
-            contentDescription = null,
-            tint = if (active) colors.brand else colors.textTertiary,
-            modifier = Modifier.size(15.dp)
-        )
+        CampusDropdownArrow(tint = if (active) colors.brand else colors.textTertiary)
     }
+}
+
+/**
+ * 下拉指示箭头。
+ *
+ * 沿用 Miuix 下拉菜单的上下箭头字形（Miuix 的 `ExpandMore` 是「展开全屏」的四角图标，不能当下拉箭头），
+ * 按 13sp 胶囊文字把 Miuix 默认 10×16dp 等比缩小。
+ */
+@Composable
+fun CampusDropdownArrow(
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Icon(
+        imageVector = MiuixIcons.Basic.ArrowUpDown,
+        contentDescription = null,
+        tint = tint,
+        modifier = modifier.size(width = 8.dp, height = 13.dp)
+    )
+}
+
+/**
+ * 列表或模块为空时的居中单行提示：抽屉选择列表为空时避免只剩标题栏，
+ * 首页模块的数据由别处（如主卡）说明错误原因时，用它占位而不重复整张状态面板。
+ */
+@Composable
+fun CampusEmptyHint(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = CampusSpacing.xl),
+        fontSize = 14.sp,
+        color = CampusTheme.colors.textSecondary,
+        textAlign = TextAlign.Center
+    )
 }
 
 /**

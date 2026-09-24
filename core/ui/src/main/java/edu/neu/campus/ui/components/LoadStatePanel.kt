@@ -12,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,14 +34,11 @@ import edu.neu.campus.ui.theme.CampusMotion
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Lock
-import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Report
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.WorldClock
@@ -218,29 +214,9 @@ private fun ErrorPanel(
         Spacer(modifier = Modifier.height(CampusSpacing.xxs))
 
         if (kind == QueryErrorKind.AUTH_REQUIRED && onLogin != null) {
-            Button(
-                onClick = onLogin,
-                colors = ButtonDefaults.buttonColorsPrimary()
-            ) {
-                Text("登录学校账号")
-            }
+            CampusButton(text = "登录学校账号", onClick = onLogin, primary = true)
         } else if (error?.retryable == true && onRetry != null) {
-            Button(
-                onClick = onRetry,
-                colors = ButtonDefaults.buttonColorsPrimary()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Regular.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text("重新同步")
-                }
-            }
+            CampusButton(text = "重新同步", onClick = onRetry, primary = true)
         }
     }
 }
@@ -284,12 +260,7 @@ private fun EmptyPanel(
         )
 
         if (actionText != null && onAction != null) {
-            Button(
-                onClick = onAction,
-                colors = ButtonDefaults.buttonColors()
-            ) {
-                Text(actionText)
-            }
+            CampusButton(text = actionText, onClick = onAction)
         }
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,11 +34,14 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.*
 import edu.neu.campus.ui.components.CampusCard
+import edu.neu.campus.ui.components.CampusDropdownArrow
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusFilterChip
 import edu.neu.campus.ui.components.CampusGroupDivider
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusSelectionRow
+import edu.neu.campus.ui.components.CampusSheetCloseAction
+import edu.neu.campus.ui.components.CampusEmptyHint
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
@@ -51,7 +55,6 @@ import edu.neu.campus.ui.timetable.CourseDetailBottomSheet
 import edu.neu.campus.ui.timetable.TimetableGrid
 import edu.neu.campus.ui.timetable.dayOfWeekText
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -60,7 +63,6 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.icon.extended.More
@@ -145,6 +147,10 @@ fun TimetableScreen(
     val showGrid = !isListView && LocalDensity.current.fontScale < 1.3f &&
         !(selectedCampusId == null && campuses.size > 1)
 
+    val scheduleError = weeksSnapshot?.error ?: termsSnapshot.error
+    val timetablePanelVisible = timetableSnapshot != null &&
+        (timetableSnapshot.phase == QueryPhase.LOADING || timetableSnapshot.phase == QueryPhase.FAILED)
+
     val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = Modifier
@@ -216,10 +222,10 @@ fun TimetableScreen(
             onBackToCurrent = { weeks.firstOrNull { it.isCurrent }?.let { selectedWeekNumber = it.number } }
         )
 
-        if (termsSnapshot.error != null || weeksSnapshot?.error != null) {
+        if (scheduleError != null) {
             LoadStatePanel(
                 false,
-                error = weeksSnapshot?.error ?: termsSnapshot.error,
+                error = scheduleError,
                 onRetry = {
                     coroutineScope.launch {
                         academic.refreshTerms()
@@ -234,9 +240,7 @@ fun TimetableScreen(
                 SafeDataTag(text = "当前显示上次同步课表，可能已变化")
             }
         }
-        if (timetableSnapshot != null &&
-            (timetableSnapshot.phase == QueryPhase.LOADING || timetableSnapshot.phase == QueryPhase.FAILED)
-        ) {
+        if (timetablePanelVisible) {
             LoadStatePanel(
                 isLoading = timetableSnapshot.phase == QueryPhase.LOADING && timetableSnapshot.data == null,
                 error = timetableSnapshot.error,
@@ -251,55 +255,66 @@ fun TimetableScreen(
 
         // 4. 课表内容：网格 <-> 列表 转场
         Box(modifier = Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = showGrid,
-                transitionSpec = {
-                    (fadeIn(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)) +
-                        androidx.compose.animation.scaleIn(
-                            initialScale = 0.98f,
-                            animationSpec = tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)
-                        ))
-                        .togetherWith(fadeOut(tween(CampusMotion.Duration.instant)))
-                        .using(SizeTransform(clip = false))
-                },
-                label = "timetableMode"
-            ) { gridMode ->
-                if (gridMode) {
-                    // 网格本身是白色表体，收进圆角卡片里，避免与页面底色形成生硬色带。
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(
-                                start = CampusSpacing.screenHorizontal,
-                                end = CampusSpacing.screenHorizontal,
-                                bottom = CampusSpacing.xs
+            if (rawTable == null) {
+                // 还没有课表数据时，只保留一个状态面板；上方已有错误或加载面板时这里留空，
+                // 不再叠一张只写着「暂无节次」的空网格卡片。
+                if (scheduleError == null && !timetablePanelVisible) {
+                    LoadStatePanel(
+                        isLoading = termsSnapshot.phase == QueryPhase.LOADING,
+                        emptyMessage = "暂无课表数据"
+                    )
+                }
+            } else {
+                AnimatedContent(
+                    targetState = showGrid,
+                    transitionSpec = {
+                        (fadeIn(tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)) +
+                            androidx.compose.animation.scaleIn(
+                                initialScale = 0.98f,
+                                animationSpec = tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.emphasizedDecelerate)
+                            ))
+                            .togetherWith(fadeOut(tween(CampusMotion.Duration.instant)))
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "timetableMode"
+                ) { gridMode ->
+                    if (gridMode) {
+                        // 网格本身是白色表体，收进圆角卡片里，避免与页面底色形成生硬色带。
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(
+                                    start = CampusSpacing.screenHorizontal,
+                                    end = CampusSpacing.screenHorizontal,
+                                    bottom = CampusSpacing.xs
+                                )
+                                .clip(RoundedCornerShape(CampusShapes.extraLarge))
+                                .background(colors.surface)
+                                .border(
+                                    width = 1.dp,
+                                    color = colors.outlineVariant,
+                                    shape = RoundedCornerShape(CampusShapes.extraLarge)
+                                )
+                        ) {
+                            TimetableGrid(
+                                courses = filteredCourses,
+                                currentWeek = currentWeekObj,
+                                sections = rawTable?.sectionsByCampus?.let {
+                                    if (selectedCampusId != null) it[selectedCampusId].orEmpty() else it.values.flatten()
+                                }.orEmpty(),
+                                onCourseClick = { inspectingCourse = it },
+                                onConflictClick = { conflictCourses = it }
                             )
-                            .clip(RoundedCornerShape(CampusShapes.extraLarge))
-                            .background(colors.surface)
-                            .border(
-                                width = 1.dp,
-                                color = colors.outlineVariant,
-                                shape = RoundedCornerShape(CampusShapes.extraLarge)
-                            )
-                    ) {
-                        TimetableGrid(
+                        }
+                    } else {
+                        TimetableDayList(
                             courses = filteredCourses,
-                            currentWeek = currentWeekObj,
-                            sections = rawTable?.sectionsByCampus?.let {
-                                if (selectedCampusId != null) it[selectedCampusId].orEmpty() else it.values.flatten()
-                            }.orEmpty(),
-                            onCourseClick = { inspectingCourse = it },
-                            onConflictClick = { conflictCourses = it }
+                            showCampusName = campuses.size > 1,
+                            campusNameOf = { id -> campuses.firstOrNull { it.id == id }?.name ?: id },
+                            isReady = timetableSnapshot?.phase == QueryPhase.READY,
+                            onCourseClick = { inspectingCourse = it }
                         )
                     }
-                } else {
-                    TimetableDayList(
-                        courses = filteredCourses,
-                        showCampusName = campuses.size > 1,
-                        campusNameOf = { id -> campuses.firstOrNull { it.id == id }?.name ?: id },
-                        isReady = timetableSnapshot?.phase == QueryPhase.READY,
-                        onCourseClick = { inspectingCourse = it }
-                    )
                 }
             }
         }
@@ -372,14 +387,12 @@ fun TimetableScreen(
             show = true,
             title = "同时段课程冲突 (${conflicts.size} 项)",
             onDismissRequest = { conflictCourses = null },
-            endAction = {
-                Button(onClick = { conflictCourses = null }) { Text("关闭") }
-            }
+            startAction = { CampusSheetCloseAction(onClick = { conflictCourses = null }) }
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(CampusSpacing.lg),
+                    .padding(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
             ) {
                 Text(
@@ -452,15 +465,16 @@ fun TimetableScreen(
             show = true,
             title = "选择教学周",
             onDismissRequest = { showWeekPicker = false },
-            endAction = { Button(onClick = { showWeekPicker = false }) { Text("关闭") } }
+            startAction = { CampusSheetCloseAction(onClick = { showWeekPicker = false }) }
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
-                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.sm),
+                    .padding(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
+                if (weeks.isEmpty()) item { CampusEmptyHint(text = "暂无教学周信息") }
                 itemsIndexed(weeks) { index, w ->
                     val isSelected = w.number == selectedWeekNumber
                     StaggeredAppear(index = index, key = weeks.size) {
@@ -485,15 +499,16 @@ fun TimetableScreen(
             show = true,
             title = "选择学期",
             onDismissRequest = { showTermPicker = false },
-            endAction = { Button(onClick = { showTermPicker = false }) { Text("关闭") } }
+            startAction = { CampusSheetCloseAction(onClick = { showTermPicker = false }) }
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
-                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.sm),
+                    .padding(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
+                if (terms.isEmpty()) item { CampusEmptyHint(text = "暂无可选学期") }
                 itemsIndexed(terms) { index, t ->
                     val isSelected = t.id == currentTerm?.id
                     StaggeredAppear(index = index, key = terms.size) {
@@ -520,12 +535,12 @@ fun TimetableScreen(
             show = true,
             title = "更多课表选项与未排课",
             onDismissRequest = { showUnscheduledSheet = false },
-            endAction = { Button(onClick = { showUnscheduledSheet = false }) { Text("关闭") } }
+            startAction = { CampusSheetCloseAction(onClick = { showUnscheduledSheet = false }) }
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(CampusSpacing.lg),
+                    .padding(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
             ) {
                 CampusCard(
@@ -652,6 +667,9 @@ private fun ViewModeToggle(
     }
 }
 
+/** 周次控制条内所有控件的统一高度：步进按钮、周次胶囊与「回本周」上下边缘对齐。 */
+private val WeekControlHeight = 36.dp
+
 /** 周次控制条。 */
 @Composable
 private fun WeekController(
@@ -684,17 +702,18 @@ private fun WeekController(
                     imageVector = MiuixIcons.Regular.ChevronBackward,
                     contentDescription = "上一周",
                     tint = if (weekNumber > 1) colors.textPrimary else colors.textDisabled,
-                    modifier = Modifier.size(17.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
 
             Row(
                 modifier = Modifier
+                    .height(WeekControlHeight)
                     .tapScale(onClick = onPickWeek, pressedScale = 0.95f, clipShape = RoundedCornerShape(CampusShapes.pill))
                     .background(colors.brandContainer)
-                    .padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs),
+                    .padding(horizontal = CampusSpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 val sDate = week?.startDate
                 val eDate = week?.endDate
@@ -705,12 +724,7 @@ private fun WeekController(
                     fontWeight = FontWeight.SemiBold,
                     color = colors.brand
                 )
-                Icon(
-                    imageVector = MiuixIcons.Regular.ExpandMore,
-                    contentDescription = null,
-                    tint = colors.brand,
-                    modifier = Modifier.size(15.dp)
-                )
+                CampusDropdownArrow(tint = colors.brand)
             }
 
             StepperButton(
@@ -721,7 +735,7 @@ private fun WeekController(
                     imageVector = MiuixIcons.Regular.ChevronForward,
                     contentDescription = "下一周",
                     tint = if (weekNumber < maxWeek) colors.textPrimary else colors.textDisabled,
-                    modifier = Modifier.size(17.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -734,9 +748,10 @@ private fun WeekController(
         ) {
             Row(
                 modifier = Modifier
+                    .height(WeekControlHeight)
                     .tapScale(onClick = onBackToCurrent, pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.pill))
                     .background(colors.brand)
-                    .padding(horizontal = CampusSpacing.sm + 2.dp, vertical = 7.dp),
+                    .padding(horizontal = CampusSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -766,11 +781,10 @@ private fun StepperButton(
     val colors = CampusTheme.colors
     Box(
         modifier = Modifier
-            .size(42.dp)
-            .clip(RoundedCornerShape(CampusShapes.extraSmall))
+            .size(WeekControlHeight)
+            .tapScale(onClick = onClick, enabled = enabled, pressedScale = 0.9f, clipShape = CircleShape)
             .background(colors.surface)
-            .border(1.dp, colors.outlineVariant, RoundedCornerShape(CampusShapes.extraSmall))
-            .tapScale(onClick = onClick, enabled = enabled, pressedScale = 0.9f),
+            .border(1.dp, colors.outlineVariant, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         content()
@@ -829,8 +843,7 @@ private fun TimetableDayList(
                         text = "星期${dayOfWeekText(day)}",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary,
-                        modifier = Modifier.padding(start = 4.dp)
+                        color = colors.textPrimary
                     )
                     CampusGroup {
                         dayCourses.forEachIndexed { idx, c ->

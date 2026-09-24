@@ -8,12 +8,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import edu.neu.campus.app.config.HomeLayoutConfigManager
 import edu.neu.campus.app.registry.FeatureRegistry
+import edu.neu.campus.ui.components.CampusButton
 import edu.neu.campus.ui.components.CampusCheckbox
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusGroupDivider
@@ -26,15 +28,13 @@ import edu.neu.campus.ui.components.StaggeredAppear
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.BankCards
-import top.yukonga.miuix.kmp.icon.extended.ExpandLess
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Messages
@@ -77,7 +77,8 @@ fun HomeConfigScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.sm),
+                .padding(horizontal = CampusSpacing.screenHorizontal)
+                .padding(top = CampusSpacing.xs, bottom = CampusSpacing.screenBottom),
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
         ) {
             // 1. 快捷查询栏自选
@@ -192,11 +193,14 @@ fun HomeConfigScreen(
                                             enabled = index > 0,
                                             modifier = Modifier.size(32.dp)
                                         ) {
+                                            // Miuix 的 ExpandLess/ExpandMore 是全屏四角图标，这里把前进箭头转成上下箭头。
                                             Icon(
-                                                imageVector = MiuixIcons.Regular.ExpandLess,
+                                                imageVector = MiuixIcons.Regular.ChevronForward,
                                                 contentDescription = "上移",
                                                 tint = if (index > 0) campusColors.brand else campusColors.textSecondary.copy(alpha = 0.3f),
-                                                modifier = Modifier.size(20.dp)
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .rotate(-90f)
                                             )
                                         }
 
@@ -206,10 +210,12 @@ fun HomeConfigScreen(
                                             modifier = Modifier.size(32.dp)
                                         ) {
                                             Icon(
-                                                imageVector = MiuixIcons.Regular.ExpandMore,
+                                                imageVector = MiuixIcons.Regular.ChevronForward,
                                                 contentDescription = "下移",
                                                 tint = if (index < modules.size - 1) campusColors.brand else campusColors.textSecondary.copy(alpha = 0.3f),
-                                                modifier = Modifier.size(20.dp)
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .rotate(90f)
                                             )
                                         }
                                     }
@@ -225,7 +231,7 @@ fun HomeConfigScreen(
                 CampusGroup {
                     CampusRow(
                         title = "重置为默认布局",
-                        subtitle = "恢复初始快捷入口与默认模块排序",
+                        subtitle = "恢复默认入口与模块顺序",
                         leading = {
                             CampusIconBadge(
                                 icon = MiuixIcons.Regular.Reset,
@@ -237,20 +243,17 @@ fun HomeConfigScreen(
                             )
                         },
                         trailingContent = {
-                            Button(
+                            CampusButton(
+                                text = "恢复默认",
                                 onClick = {
                                     HomeLayoutConfigManager.restoreDefaults()
                                     Toast.makeText(context, "已恢复默认首页布局", Toast.LENGTH_SHORT).show()
                                 }
-                            ) {
-                                Text("恢复默认")
-                            }
+                            )
                         }
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(CampusSpacing.xl))
         }
     }
 }

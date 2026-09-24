@@ -25,6 +25,8 @@ import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusSegmentedControl
 import edu.neu.campus.ui.components.CampusSelectionRow
+import edu.neu.campus.ui.components.CampusSheetCloseAction
+import edu.neu.campus.ui.components.CampusEmptyHint
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
@@ -33,7 +35,6 @@ import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
@@ -157,7 +158,10 @@ fun ExamsScreen(
                     onRetry = { coroutineScope.launch { academic.refreshTerms() } }, onLogin = onLoginClick)
             }
             // 3. 错误与加载处理
-            if (examsSnapshot != null && (examsSnapshot.phase == QueryPhase.LOADING || examsSnapshot.phase == QueryPhase.FAILED)) {
+            // 学期已失败时考试列表必然跟着失败，只保留上面那张状态卡。
+            if (termsSnapshot.error == null && examsSnapshot != null &&
+                (examsSnapshot.phase == QueryPhase.LOADING || examsSnapshot.phase == QueryPhase.FAILED)
+            ) {
                 item {
                     LoadStatePanel(
                         isLoading = examsSnapshot.phase == QueryPhase.LOADING && examsSnapshot.data == null,
@@ -358,15 +362,16 @@ fun ExamsScreen(
             show = true,
             title = "选择考试学期",
             onDismissRequest = { showTermPicker = false },
-            endAction = { Button(onClick = { showTermPicker = false }) { Text("关闭") } }
+            startAction = { CampusSheetCloseAction(onClick = { showTermPicker = false }) }
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 380.dp),
-                contentPadding = PaddingValues(CampusSpacing.md),
+                contentPadding = PaddingValues(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
+                if (terms.isEmpty()) item { CampusEmptyHint(text = "暂无可选学期") }
                 itemsIndexed(terms) { index, t ->
                     val isSelected = t.id == currentTerm?.id
                     StaggeredAppear(

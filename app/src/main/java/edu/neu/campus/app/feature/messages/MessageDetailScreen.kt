@@ -87,8 +87,9 @@ fun MessageDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = CampusSpacing.screenHorizontal)
+                .padding(top = CampusSpacing.xs, bottom = CampusSpacing.screenBottom),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
         ) {
             // 1. 标题与元数据卡
             CampusCard(contentPadding = PaddingValues(CampusSpacing.lg)) {

@@ -20,14 +20,21 @@ import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Stopwatch
 import top.yukonga.miuix.kmp.icon.extended.Weeks
 
+/** 列表行图标尺寸；分隔线据此缩进到文字起点。 */
+private val WeekIconSize = 38.dp
+private val SectionIconSize = 34.dp
+
 @Composable
-fun ScheduleScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun ScheduleScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLoginClick: (() -> Unit)? = null
+) {
     val repo = CampusDataProvider.academic
     val scope = rememberCoroutineScope()
     val colors = CampusTheme.colors
@@ -55,13 +62,23 @@ fun ScheduleScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             subtitle = "校区节次与校历",
             onBack = onBack
         )
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(CampusSpacing.screenHorizontal),
-            verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = CampusSpacing.screenHorizontal)
+                .padding(top = CampusSpacing.xs, bottom = CampusSpacing.screenBottom),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
+        ) {
             StaggeredAppear(index = 0) {
-                Button(onClick = {
-                    val list = terms.data.orEmpty()
-                    if (list.isNotEmpty()) selectedTermId = list[(list.indexOf(term) + 1) % list.size].id
-                }) { Text(term?.name ?: "学期待确认") }
+                // 与课表、考试页一致的学期胶囊；点按依次切换学校返回的学期。
+                CampusFilterChip(
+                    text = term?.name ?: "学期待确认",
+                    onClick = {
+                        val list = terms.data.orEmpty()
+                        if (list.isNotEmpty()) selectedTermId = list[(list.indexOf(term) + 1) % list.size].id
+                    }
+                )
             }
 
             StaggeredAppear(index = 1) {
@@ -73,59 +90,95 @@ fun ScheduleScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             }
 
             val error = if (calendar) weeks?.error ?: terms.error else table?.error ?: terms.error
-            if (error != null) LoadStatePanel(false, error = error, onRetry = {
-                scope.launch {
-                    repo.refreshTerms()
-                    term?.let { if (calendar) repo.refreshWeeks(it.id) else repo.refreshTimetable(it.id, null) }
-                }
-            })
+            if (error != null) LoadStatePanel(
+                false,
+                error = error,
+                onRetry = {
+                    scope.launch {
+                        repo.refreshTerms()
+                        term?.let { if (calendar) repo.refreshWeeks(it.id) else repo.refreshTimetable(it.id, null) }
+                    }
+                },
+                onLogin = onLoginClick
+            )
             if (calendar) {
-                if (weeks?.data == null) {
-                    LoadStatePanel(weeks?.phase == QueryPhase.LOADING || terms.phase == QueryPhase.LOADING,
-                        emptyMessage = "尚未获取该学期校历")
-                } else if (weeks.data.orEmpty().isEmpty()) Text("学校未返回该学期教学周")
-                else weeks.data.orEmpty().forEachIndexed { index, week ->
-                    StaggeredAppear(index = index) {
+                val weekList = weeks?.data
+                when {
+                    // 已有错误面板时不再叠一张「尚未获取」的空状态。
+                    weekList == null -> if (error == null) {
+                        LoadStatePanel(
+                            weeks?.phase == QueryPhase.LOADING || terms.phase == QueryPhase.LOADING,
+                            emptyMessage = "尚未获取该学期校历"
+                        )
+                    }
+                    weekList.isEmpty() -> Text("学校未返回该学期教学周", fontSize = 14.sp, color = colors.textSecondary)
+                    else -> StaggeredAppear(index = 2) {
+                        // 教学周放进同一个分组，行间用缩进分隔线，避免每周一张小卡。
                         CampusGroup {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
-                            ) {
-                                CampusIconBadge(
-                                    icon = MiuixIcons.Regular.Weeks,
-                                    tint = colors.brand,
-                                    container = colors.brandContainer,
-                                    size = 38.dp,
-                                    iconSize = 20.dp,
-                                    cornerRadius = CampusShapes.extraSmall
-                                )
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text("第 ${week.number} 周${if (week.isCurrent) " · 本周" else ""}",
-                                        fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.brand)
-                                    Text("${week.startDate ?: "日期未提供"} — ${week.endDate ?: "日期未提供"}",
-                                        fontSize = 12.sp, color = colors.textSecondary)
+                            weekList.forEachIndexed { index, week ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = CampusSpacing.xs),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+                                ) {
+                                    CampusIconBadge(
+                                        icon = MiuixIcons.Regular.Weeks,
+                                        tint = colors.brand,
+                                        container = colors.brandContainer,
+                                        size = WeekIconSize,
+                                        iconSize = 20.dp,
+                                        cornerRadius = CampusShapes.extraSmall
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            "第 ${week.number} 周${if (week.isCurrent) " · 本周" else ""}",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (week.isCurrent) colors.brand else colors.textPrimary
+                                        )
+                                        Text(
+                                            "${week.startDate ?: "日期未提供"} — ${week.endDate ?: "日期未提供"}",
+                                            fontSize = 12.sp,
+                                            color = colors.textSecondary
+                                        )
+                                    }
+                                }
+                                if (index < weekList.lastIndex) {
+                                    CampusGroupDivider(startIndent = WeekIconSize + CampusSpacing.sm)
                                 }
                             }
                         }
                     }
                 }
                 Text("仅显示学校返回的教学周，不推断选退课、考试或放假节点。", fontSize = 12.sp, color = colors.textSecondary)
-                SafeDataTag(sourceName = "教务校历", lastSuccessEpochMillis = weeks?.lastSuccessEpochMillis,
-                    isStale = weeks?.isStale ?: false)
+                SafeDataTag(
+                    sourceName = "教务校历",
+                    lastSuccessEpochMillis = weeks?.lastSuccessEpochMillis,
+                    isStale = weeks?.isStale ?: false
+                )
             } else {
                 val data = table?.data
-                if (data == null) LoadStatePanel(table?.phase == QueryPhase.LOADING || terms.phase == QueryPhase.LOADING,
-                    emptyMessage = "尚未获取学校节次信息")
+                if (data == null && error == null) {
+                    LoadStatePanel(
+                        table?.phase == QueryPhase.LOADING || terms.phase == QueryPhase.LOADING,
+                        emptyMessage = "尚未获取学校节次信息"
+                    )
+                }
                 data?.campuses?.forEachIndexed { index, campus ->
-                    StaggeredAppear(index = index) {
+                    StaggeredAppear(index = index + 2) {
                         CampusSection(title = campus.name ?: "校区 ${campus.id}") {
                             CampusGroup {
                                 val sections = data.sectionsByCampus[campus.id].orEmpty()
-                                if (sections.isEmpty()) Text("学校当前未提供节次信息")
-                                sections.forEach { section ->
+                                if (sections.isEmpty()) {
+                                    Text("学校当前未提供节次信息", fontSize = 14.sp, color = colors.textSecondary)
+                                }
+                                sections.forEachIndexed { sectionIndex, section ->
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = CampusSpacing.xs),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                                     ) {
@@ -133,26 +186,38 @@ fun ScheduleScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                             icon = MiuixIcons.Regular.Stopwatch,
                                             tint = colors.timetableForeground,
                                             container = colors.timetableContainer,
-                                            size = 34.dp,
+                                            size = SectionIconSize,
                                             iconSize = 18.dp,
                                             cornerRadius = CampusShapes.extraSmall
                                         )
                                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                            Text(section.name ?: "第 ${section.code} 节",
-                                                fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                                            Text(if (section.startTime != null && section.endTime != null)
-                                                "${section.startTime}—${section.endTime}" else "学校当前未提供节次时间",
-                                                fontSize = 12.sp, color = colors.textSecondary)
+                                            Text(
+                                                section.name ?: "第 ${section.code} 节",
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = colors.textPrimary
+                                            )
+                                            Text(
+                                                if (section.startTime != null && section.endTime != null)
+                                                    "${section.startTime}—${section.endTime}" else "学校当前未提供节次时间",
+                                                fontSize = 12.sp,
+                                                color = colors.textSecondary
+                                            )
                                         }
                                     }
-                                    CampusGroupDivider()
+                                    if (sectionIndex < sections.lastIndex) {
+                                        CampusGroupDivider(startIndent = SectionIconSize + CampusSpacing.sm)
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                SafeDataTag(sourceName = "教务节次", lastSuccessEpochMillis = table?.lastSuccessEpochMillis,
-                    isStale = table?.isStale ?: false)
+                SafeDataTag(
+                    sourceName = "教务节次",
+                    lastSuccessEpochMillis = table?.lastSuccessEpochMillis,
+                    isStale = table?.isStale ?: false
+                )
             }
         }
     }

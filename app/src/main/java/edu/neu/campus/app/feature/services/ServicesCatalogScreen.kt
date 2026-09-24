@@ -75,13 +75,18 @@ fun ServicesCatalogScreen(
             onBack = onBack
         )
 
-        Row(modifier = Modifier.padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs)) {
+        Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs)) {
             SafeDataTag(text = "学校服务将在系统浏览器中打开")
         }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(CampusSpacing.md),
+            contentPadding = PaddingValues(
+                start = CampusSpacing.screenHorizontal,
+                end = CampusSpacing.screenHorizontal,
+                top = CampusSpacing.xs,
+                bottom = CampusSpacing.screenBottom
+            ),
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
         ) {
             itemsIndexed(serviceList, key = { _, item -> item.id }) { index, item ->

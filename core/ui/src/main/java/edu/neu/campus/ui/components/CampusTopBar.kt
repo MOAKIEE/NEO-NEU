@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -19,6 +20,9 @@ import top.yukonga.miuix.kmp.icon.extended.Back
  * 约定：
  * - 背景与页面背景同色，避免状态栏区域与标题栏之间出现横向色带断层
  * - 传入 [scrollBehavior] 后大标题会随内容滚动收起为小标题（Miuix 折叠规范）
+ * - 大标题左缘与正文统一落在 [CampusSpacing.screenHorizontal]；Miuix 默认 26dp 会比卡片多缩进 6dp
+ * - 导航/操作图标按钮为 40dp 触控区、图标 24dp，两侧各留 8dp，因此外边距取 12dp，
+ *   让图标的可见边缘同样落在 20dp 参考线上
  *
  * 接入折叠时三处必须成对出现，缺一会失效：
  * ```
@@ -56,6 +60,9 @@ fun CampusTopBar(
         subtitle = subtitle,
         subtitleColor = colors.textSecondary,
         defaultWindowInsetsPadding = defaultWindowInsetsPadding,
+        titlePadding = CampusSpacing.screenHorizontal,
+        navigationIconPadding = CampusSpacing.sm,
+        actionIconPadding = CampusSpacing.sm,
         navigationIcon = if (onBack != null) {
             {
                 IconButton(onClick = onBack) {

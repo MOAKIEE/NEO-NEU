@@ -13,9 +13,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.contract.CourseOccurrence
+import edu.neu.campus.ui.components.CampusSheetCloseAction
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 
@@ -40,11 +41,7 @@ fun CourseDetailBottomSheet(
         show = course != null,
         title = course?.title ?: "课程详情",
         onDismissRequest = onDismiss,
-        endAction = {
-            Button(onClick = onDismiss) {
-                Text("关闭")
-            }
-        }
+        startAction = { CampusSheetCloseAction(onClick = onDismiss) }
     ) {
         if (course != null) {
             val (courseAccentColor, _) = colors.courseColor(course.title)
@@ -52,7 +49,7 @@ fun CourseDetailBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .padding(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.xs)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {

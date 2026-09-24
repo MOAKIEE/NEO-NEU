@@ -71,7 +71,8 @@ fun HeroCourseCard(
     onClickCourse: (CourseOccurrence) -> Unit,
     onConflictClick: (List<CourseOccurrence>) -> Unit,
     onGotoTimetable: () -> Unit,
-    onRetry: () -> Unit,
+    // 为 null 时不显示重试/同步按钮：例如登录失效时重试必然失败，登录入口由页面横幅提供。
+    onRetry: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val colors = CampusTheme.colors
@@ -167,9 +168,10 @@ fun HeroCourseCard(
                         onPrimary = null
                     )
 
+                    // 顶部状态标签已写明「教学周待确认」，标题改说结果，避免同一张卡上重复两次。
                     HeroState.TermPending -> HeroMessage(
-                        title = "教学周待确认",
-                        description = "学校尚未返回当前教学周，课表与今日课程暂不推断",
+                        title = "今日课程暂无法确定",
+                        description = "学校尚未返回当前教学周，暂不推断今日课程",
                         primaryText = "查看课表",
                         onPrimary = onGotoTimetable
                     )
@@ -204,7 +206,7 @@ private fun HeroScheduleContent(
     onClickCourse: (CourseOccurrence) -> Unit,
     onConflictClick: (List<CourseOccurrence>) -> Unit,
     onGotoTimetable: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: (() -> Unit)?
 ) {
     val colors = CampusTheme.colors
     val course = focus.courses.firstOrNull()
@@ -278,7 +280,9 @@ private fun HeroScheduleContent(
                     color = colors.onHero.copy(alpha = 0.75f),
                     fontSize = 12.sp
                 )
-                HeroButton(text = "重试", primary = false, onClick = onRetry)
+                if (onRetry != null) {
+                    HeroButton(text = "重试", primary = false, onClick = onRetry)
+                }
             }
         }
     }

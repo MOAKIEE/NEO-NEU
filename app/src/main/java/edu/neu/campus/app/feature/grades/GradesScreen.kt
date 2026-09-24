@@ -27,7 +27,6 @@ import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
@@ -100,6 +99,11 @@ fun GradesScreen(
         list
     }
 
+    // 学期或绩点失败时成绩列表通常也会失败，此时只在顶部展示一张状态卡。
+    val pageError = gradeSummarySnapshot.error
+        ?: gradeTermIdsSnapshot.error
+        ?: termsSnapshot.error
+
     val pageScrollBehavior = MiuixScrollBehavior()
     Column(
         modifier = Modifier
@@ -115,11 +119,14 @@ fun GradesScreen(
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = CampusSpacing.md),
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.md),
-            contentPadding = PaddingValues(bottom = CampusSpacing.xxl)
+            contentPadding = PaddingValues(
+                start = CampusSpacing.screenHorizontal,
+                end = CampusSpacing.screenHorizontal,
+                top = CampusSpacing.xs,
+                bottom = CampusSpacing.screenBottom
+            )
         ) {
             // 1. 官方总平均学分绩点统计卡
             item {
@@ -195,29 +202,25 @@ fun GradesScreen(
                 }
             }
 
-            if (gradeSummarySnapshot.error != null) item {
+            // 绩点、学期与成绩列表常因同一原因（如登录过期）一起失败，只展示一张状态卡，
+            // 重试时一并刷新失败的部分，避免页面上叠出多张相同的提示。
+            if (pageError != null) item {
                 CampusCard {
                     LoadStatePanel(
-                        false, error = gradeSummarySnapshot.error,
-                        onRetry = { coroutineScope.launch { academic.refreshGradeSummary() } },
-                        onLogin = onLoginClick
-                    )
-                }
-            }
-            if (gradeSummarySnapshot.isStale) item { SafeDataTag(text = "绩点为上次同步数据") }
-            if (termsSnapshot.error != null || gradeTermIdsSnapshot.error != null) item {
-                CampusCard {
-                    LoadStatePanel(
-                        false, error = gradeTermIdsSnapshot.error ?: termsSnapshot.error,
+                        false, error = pageError,
                         onRetry = {
                             coroutineScope.launch {
-                                academic.refreshTerms(); academic.refreshGradeTermIds()
+                                if (gradeSummarySnapshot.error != null) academic.refreshGradeSummary()
+                                if (termsSnapshot.error != null) academic.refreshTerms()
+                                if (gradeTermIdsSnapshot.error != null) academic.refreshGradeTermIds()
+                                if (gradesSnapshot?.error != null) academic.refreshGrades(activeTermId)
                             }
                         },
                         onLogin = onLoginClick
                     )
                 }
             }
+            if (gradeSummarySnapshot.isStale) item { SafeDataTag(text = "绩点为上次同步数据") }
 
             // 2. 学期选择与排序
             item {
@@ -252,7 +255,7 @@ fun GradesScreen(
             }
 
             // 4. 加载与异常状态
-            if (gradesSnapshot != null &&
+            if (pageError == null && gradesSnapshot != null &&
                 (gradesSnapshot.phase == QueryPhase.LOADING || gradesSnapshot.phase == QueryPhase.FAILED)
             ) {
                 item {
@@ -270,9 +273,7 @@ fun GradesScreen(
             // 5. 成绩列表标题
             item {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -391,15 +392,16 @@ fun GradesScreen(
             show = true,
             title = "选择成绩学期",
             onDismissRequest = { showTermPicker = false },
-            endAction = { Button(onClick = { showTermPicker = false }) { Text("关闭") } }
+            startAction = { CampusSheetCloseAction(onClick = { showTermPicker = false }) }
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
-                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.sm),
+                    .padding(horizontal = CampusSpacing.sheetHorizontal, vertical = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
             ) {
+                if (availableTerms.isEmpty()) item { CampusEmptyHint(text = "暂无可选学期") }
                 itemsIndexed(availableTerms) { index, termId ->
                     val isSelected = termId == activeTermId
                     StaggeredAppear(index = index, key = availableTerms.size) {

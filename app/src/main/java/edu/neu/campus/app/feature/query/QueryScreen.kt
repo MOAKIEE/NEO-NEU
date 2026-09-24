@@ -38,9 +38,9 @@ import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.app.registry.FeatureItem
 import edu.neu.campus.app.registry.FeatureRegistry
 import edu.neu.campus.contract.BalanceKind
+import edu.neu.campus.ui.components.CampusButton
 import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
-import edu.neu.campus.ui.components.CampusGroupDivider
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusRow
@@ -53,7 +53,6 @@ import edu.neu.campus.ui.theme.CampusMotion
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
@@ -117,7 +116,7 @@ fun QueryScreen(
             CampusSearchField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = "搜索功能，如成绩、考试、课表、网费"
+                placeholder = "搜索成绩、考试、课表等"
             )
         }
 
@@ -165,9 +164,7 @@ fun QueryScreen(
                                 color = colors.textSecondary,
                                 textAlign = TextAlign.Center
                             )
-                            Button(onClick = { searchQuery = "" }) {
-                                Text("清除关键词")
-                            }
+                            CampusButton(text = "清除关键词", onClick = { searchQuery = "" })
                         }
                     }
                 } else {
@@ -313,8 +310,9 @@ fun QueryScreen(
                                             }
                                         }
                                     }
+                                    // 图标宫格行与行之间只留间距，不画单侧缩进的分隔线。
                                     if (rowIndex < chunked.lastIndex) {
-                                        CampusGroupDivider(startIndent = 16.dp)
+                                        Spacer(modifier = Modifier.height(CampusSpacing.xs))
                                     }
                                 }
                             }

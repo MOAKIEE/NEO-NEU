@@ -138,13 +138,15 @@ class MainActivity : ComponentActivity() {
                             }
                             is AppDestination.Messages -> {
                                 edu.neu.campus.app.feature.messages.MessagesScreen(
-                                    onBack = { AppNavigator.popBack() }
+                                    onBack = { AppNavigator.popBack() },
+                                    onLoginClick = { launchLogin() }
                                 )
                             }
                             is AppDestination.MessageDetail -> {
                                 if (dest.messageId.isBlank()) {
                                     edu.neu.campus.app.feature.messages.MessagesScreen(
-                                        onBack = { AppNavigator.popBack() }
+                                        onBack = { AppNavigator.popBack() },
+                                        onLoginClick = { launchLogin() }
                                     )
                                 } else {
                                     edu.neu.campus.app.feature.messages.MessageDetailScreen(
@@ -157,12 +159,14 @@ class MainActivity : ComponentActivity() {
                             }
                             is AppDestination.Tasks, is AppDestination.TaskDetail -> {
                                 edu.neu.campus.app.feature.tasks.TasksScreen(
-                                    onBack = { AppNavigator.popBack() }
+                                    onBack = { AppNavigator.popBack() },
+                                    onLoginClick = { launchLogin() }
                                 )
                             }
                             is AppDestination.Schedule, is AppDestination.BellSchedule -> {
                                 edu.neu.campus.app.feature.schedule.ScheduleScreen(
-                                    onBack = { AppNavigator.popBack() }
+                                    onBack = { AppNavigator.popBack() },
+                                    onLoginClick = { launchLogin() }
                                 )
                             }
                             is AppDestination.ServicesCatalog -> {

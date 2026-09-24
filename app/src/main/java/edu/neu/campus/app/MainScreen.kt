@@ -65,8 +65,8 @@ fun MainScreen(
     val stateHolder = rememberSaveableStateHolder()
 
     Scaffold(
-        // 系统栏内边距由 Miuix Scaffold 的 contentWindowInsets 与 TopAppBar/NavigationBar
-        // 自身的 defaultWindowInsetsPadding 处理；这里再叠加一次会造成顶部重复留白。
+        // 系统栏内边距由 Miuix Scaffold 的 contentWindowInsets 统一计入 paddingValues；
+        // 这里不要再叠加 statusBarsPadding 之类的修饰符，否则会造成顶部重复留白。
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background),
@@ -99,6 +99,9 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                // 必须同时标记为已消费：Miuix TopAppBar 无论 defaultWindowInsetsPadding 取值
+                // 都会自行叠加 systemBars 顶部边距，不消费会让所有标题栏上方多出一整条状态栏高度。
+                .consumeWindowInsets(paddingValues)
         ) {
             // 一级路由转场：主框架 <-> 二级详情
             AnimatedContent(
