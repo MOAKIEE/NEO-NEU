@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -300,11 +301,15 @@ private fun LoginScreen(
                 ) {
                     if (!compact) {
                         CampusCard {
-                            Row(horizontalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 ConnectionStatus("统一门户", state.portal, Modifier.weight(1f))
+                                Spacer(Modifier.width(1.dp).height(36.dp).background(colors.divider))
                                 ConnectionStatus("教务系统", state.academic, Modifier.weight(1f))
                             }
-                            Spacer(Modifier.height(CampusSpacing.xs))
+                            Spacer(Modifier.height(CampusSpacing.sm))
                             Text(connectionHint(state, hasChecked), fontSize = 12.sp, lineHeight = 18.sp,
                                 color = colors.textSecondary)
                         }
@@ -376,9 +381,13 @@ private fun ConnectionStatus(name: String, status: DomainStatus, modifier: Modif
         DomainStatus.EXPIRED -> "需要登录" to colors.warning
         DomainStatus.UNREACHABLE -> "暂不可达" to colors.textSecondary
     }
-    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
+    ) {
         Text(name, fontSize = 12.sp, color = colors.textSecondary)
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tint)
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tint)
     }
 }
 
