@@ -5,7 +5,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.net.http.SslError
 import android.webkit.CookieManager
+import android.webkit.SslErrorHandler
+import android.webkit.WebResourceResponse
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -33,6 +36,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -69,8 +73,8 @@ object OfficialLogin {
 /** The WebView only opens school HTTPS pages and never reads form fields. */
 class OfficialLoginActivity : ComponentActivity() {
     private val portalUrl = "https://personal.neu.edu.cn/portal"
-    // The official WebView starts at the school root and follows its current SSO entry redirect.
-    private val academicUrl = "https://jwxt.neu.edu.cn/"
+    // The root redirects through HTTP on some school responses; use the observed HTTPS entry.
+    private val academicUrl = "https://jwxt.neu.edu.cn/jwapp/sys/homeapp/index.do"
     private lateinit var session: LocalSession
     private lateinit var web: WebView
     private var selectedSite by mutableIntStateOf(0)
@@ -80,6 +84,7 @@ class OfficialLoginActivity : ComponentActivity() {
     private var hasChecked by mutableStateOf(false)
     private var resumingSession = false
     private var autoVerifyOnLoad = false
+    private var attemptedAcademicHandoff by mutableStateOf(false)
     private var autoCheckJob: Job? = null
     private var targetDomain = Domain.PORTAL
 
@@ -97,6 +102,7 @@ class OfficialLoginActivity : ComponentActivity() {
         // A visible re-authentication may switch accounts, so rotate the local cache scope.
         selectedSite = savedInstanceState?.getInt("selectedSite")
             ?: if (targetDomain == Domain.ACADEMIC) 1 else 0
+        attemptedAcademicHandoff = savedInstanceState?.getBoolean("attemptedAcademicHandoff") ?: false
 
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -107,11 +113,11 @@ class OfficialLoginActivity : ComponentActivity() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val url = request.url
                     val host = url.host.orEmpty().lowercase()
-                    if (url.scheme == "http" && host == "jwxt.neu.edu.cn") {
+                    val schoolHost = host == "neu.edu.cn" || host.endsWith(".neu.edu.cn")
+                    if (url.scheme == "http" && schoolHost) {
                         view.loadUrl(url.buildUpon().scheme("https").build().toString())
                         return true
                     }
-                    val schoolHost = host == "neu.edu.cn" || host.endsWith(".neu.edu.cn")
                     if (url.scheme == "https" && schoolHost) return false
                     pageError = "已阻止非学校页面的跳转"
                     return true
@@ -125,12 +131,18 @@ class OfficialLoginActivity : ComponentActivity() {
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     pageLoading = false
-                    if (autoVerifyOnLoad && Uri.parse(url.orEmpty()).host == targetHost()) {
+                    val host = Uri.parse(url.orEmpty()).host
+                    if (autoVerifyOnLoad && pageError == null &&
+                        (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn")) {
                         autoCheckJob?.cancel()
                         autoCheckJob = lifecycleScope.launch {
                             delay(700)
                             while (checking) delay(250)
-                            if (!pageLoading && Uri.parse(web.url.orEmpty()).host == targetHost()) checkConnection()
+                            val currentHost = Uri.parse(web.url.orEmpty()).host
+                            if (!pageLoading &&
+                                (currentHost == "personal.neu.edu.cn" || currentHost == "jwxt.neu.edu.cn")) {
+                                checkConnection(automatic = true)
+                            }
                         }
                     }
                 }
@@ -140,6 +152,19 @@ class OfficialLoginActivity : ComponentActivity() {
                         pageLoading = false
                         pageError = "学校网页暂时无法打开，请检查网络后重试。"
                     }
+                }
+
+                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+                    if (request.isForMainFrame) {
+                        pageLoading = false
+                        pageError = "学校网页返回 ${errorResponse.statusCode}，请稍后重试。"
+                    }
+                }
+
+                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+                    handler.cancel()
+                    pageLoading = false
+                    pageError = "学校网页的安全连接验证失败，请检查设备时间或网络。"
                 }
             }
         }
@@ -163,9 +188,12 @@ class OfficialLoginActivity : ComponentActivity() {
                     checking = checking,
                     hasChecked = hasChecked,
                     resumingSession = resumingSession,
+                    allowPortalOnly = targetDomain == Domain.PORTAL && attemptedAcademicHandoff &&
+                        state.portal == DomainStatus.READY && state.academic != DomainStatus.READY,
                     web = web,
                     onSelectSite = ::openSite,
-                    onCheck = ::checkConnection,
+                    onCheck = { checkConnection() },
+                    onRetry = { web.reload() },
                     onClose = ::finish
                 )
             }
@@ -179,29 +207,26 @@ class OfficialLoginActivity : ComponentActivity() {
         web.loadUrl(if (index == 0) portalUrl else academicUrl)
     }
 
-    private fun targetHost(): String = when (targetDomain) {
-        Domain.PORTAL -> "personal.neu.edu.cn"
-        Domain.ACADEMIC -> "jwxt.neu.edu.cn"
-    }
-
-    private fun checkConnection() {
+    private fun checkConnection(automatic: Boolean = false) {
         if (checking) return
         checking = true
-        pageError = null
         lifecycleScope.launch {
             try {
                 // Commit cookies set by the official page before native HTTP probes run.
                 session.flushCookies()
                 val result = SessionProbe.verify(session)
                 hasChecked = true
-                val targetReady = when (targetDomain) {
-                    Domain.PORTAL -> result.portal == DomainStatus.READY
-                    Domain.ACADEMIC -> result.academic == DomainStatus.READY
-                }
-                if (targetReady) {
-                    autoVerifyOnLoad = false
-                    setResult(RESULT_OK)
-                    finish()
+                when (nextLoginStep(targetDomain, result, selectedSite, attemptedAcademicHandoff, automatic)) {
+                    LoginStep.OPEN_ACADEMIC -> {
+                        attemptedAcademicHandoff = true
+                        openSite(1)
+                    }
+                    LoginStep.FINISH -> {
+                        autoVerifyOnLoad = false
+                        setResult(RESULT_OK)
+                        finish()
+                    }
+                    LoginStep.WAIT -> Unit
                 }
             } finally {
                 checking = false
@@ -211,6 +236,7 @@ class OfficialLoginActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putInt("selectedSite", selectedSite)
+        outState.putBoolean("attemptedAcademicHandoff", attemptedAcademicHandoff)
         web.saveState(outState)
         super.onSaveInstanceState(outState)
     }
@@ -232,9 +258,11 @@ private fun LoginScreen(
     checking: Boolean,
     hasChecked: Boolean,
     resumingSession: Boolean,
+    allowPortalOnly: Boolean,
     web: WebView,
     onSelectSite: (Int) -> Unit,
     onCheck: () -> Unit,
+    onRetry: () -> Unit,
     onClose: () -> Unit
 ) {
     val colors = CampusTheme.colors
@@ -283,6 +311,18 @@ private fun LoginScreen(
                         .border(1.dp, colors.outline, RoundedCornerShape(CampusShapes.medium))
                 ) {
                     AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
+                    if (pageError != null) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().background(Color.White)
+                                .padding(CampusSpacing.md),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(pageError, fontSize = 14.sp, color = colors.warning)
+                            Spacer(Modifier.height(CampusSpacing.md))
+                            Button(onClick = onRetry) { Text("重试打开网页") }
+                        }
+                    }
                 }
                 if (pageError != null || pageLoading) {
                     Text(
@@ -295,6 +335,7 @@ private fun LoginScreen(
                     Text(when {
                         checking -> "正在检查门户与教务…"
                         state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "检查连接并返回应用"
+                        allowPortalOnly -> "仅连接门户并返回应用"
                         else -> "完成登录，检查连接"
                     })
                 }
@@ -331,9 +372,9 @@ private fun connectionHint(state: SessionState, hasChecked: Boolean): String {
     if (!hasChecked) return when {
         state.portal == DomainStatus.READY && state.academic == DomainStatus.READY ->
             "当前连接正常；重新认证后点下方按钮确认连接。"
-        state.portal == DomainStatus.READY -> "门户已连接；请在教务页面完成登录，再检查连接。"
+        state.portal == DomainStatus.READY -> "门户已连接；应用会自动尝试打开教务页面。"
         state.academic == DomainStatus.READY -> "教务已连接；请在门户页面完成登录，再检查连接。"
-        else -> "先在网页完成学校登录，再点下方按钮检查。需要时可切换到教务页面继续登录。"
+        else -> "先在网页完成学校登录；门户成功后会自动尝试连接教务。"
     }
     return when {
         state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "门户与教务均已连接。"
