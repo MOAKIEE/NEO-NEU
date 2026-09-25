@@ -20,7 +20,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,7 +51,6 @@ import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.SessionState
 import edu.neu.campus.network.SessionProbe
 import edu.neu.campus.session.LocalSession
-import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusSegmentedControl
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
@@ -110,6 +108,8 @@ class OfficialLoginActivity : ComponentActivity() {
         attemptedAcademicHandoff = savedInstanceState?.getBoolean("attemptedAcademicHandoff") ?: false
 
         web = WebView(this).apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.setSupportMultipleWindows(false)
@@ -275,11 +275,10 @@ private fun LoginScreen(
         modifier = Modifier.fillMaxSize().background(colors.background),
         containerColor = colors.background
     ) { padding ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)
                 .imePadding().background(colors.background)
         ) {
-            val compact = maxHeight < 600.dp
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -299,20 +298,13 @@ private fun LoginScreen(
                         .padding(bottom = CampusSpacing.sm),
                     verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
                 ) {
-                    if (!compact) {
-                        CampusCard {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                ConnectionStatus("统一门户", state.portal, Modifier.weight(1f))
-                                Spacer(Modifier.width(1.dp).height(36.dp).background(colors.divider))
-                                ConnectionStatus("教务系统", state.academic, Modifier.weight(1f))
-                            }
-                            Spacer(Modifier.height(CampusSpacing.sm))
-                            Text(connectionHint(state, hasChecked), fontSize = 12.sp, lineHeight = 18.sp,
-                                color = colors.textSecondary)
-                        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ConnectionStatus("统一门户", state.portal, Modifier.weight(1f))
+                        Spacer(Modifier.width(1.dp).height(36.dp).background(colors.divider))
+                        ConnectionStatus("教务系统", state.academic, Modifier.weight(1f))
                     }
                     CampusSegmentedControl(
                         options = listOf("统一门户", "教务系统"),
@@ -357,7 +349,13 @@ private fun LoginScreen(
                             else -> "完成登录，检查连接"
                         })
                     }
-                    if (resumingSession && !compact) {
+                    Text(
+                        connectionHint(state, hasChecked),
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = colors.textSecondary
+                    )
+                    if (resumingSession) {
                         Text(
                             "已保留学校会话；本地数据已重新隔离，换号后不会沿用旧缓存。",
                             fontSize = 11.sp,
