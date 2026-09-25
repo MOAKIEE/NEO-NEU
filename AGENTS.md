@@ -17,4 +17,4 @@ NEO NEU 是面向东北大学学生的第三方 Android 教务与校园信息查
 - 页面通过 `core/contract` 的 Repository 读取真实数据，不直接处理 Cookie、学校接口 DTO 或业务 URL。登录、失效、离线、空结果和失败应分别呈现，不用演示数据冒充真实查询。
 - 仅实现只读功能；不提交选课、支付、挂失、申请或消息已读等学校端写操作。不要把姓名、学号、成绩、密码、Cookie、票据及原始会话记录提交到仓库。
 - 官方客户端 `base.apk` 保留在项目根目录，供模拟器安装调查；`research/official-apk/unpacked/` 是其解包参考材料，`badging.txt` 和 `manifest-tree.txt` 提供可读的包信息。官方客户端只作为行为与界面参考，不属于本项目源码或构建输入。
-- 变更前按需阅读 `docs/开发指南.md`、`docs/接口参考.md` 和 `docs/验证清单.md`。构建与测试：`.\gradlew.bat testDebugUnitTest :app:assembleDebug`（JDK 21、Android SDK 37）。
+- 变更前按需阅读 `docs/开发指南.md`、`docs/接口参考.md` 和 `docs/验证状态.md`。构建与测试：`.\gradlew.bat testDebugUnitTest :app:assembleDebug`（JDK 21、Android SDK 37）。

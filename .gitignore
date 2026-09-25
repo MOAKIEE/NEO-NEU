@@ -2,6 +2,13 @@
 /research/miuix-source/
 /research/academic-source/
 /research/portal-source/
+/research/local/
+/research/official-app-*.md
+/research/official-app-request-evidence.jsonl
+/research/tools/
+/research/public-web/entry-observations.json
+/docs/验证清单.md
+/docs/实时同步与会话保持设计.md
 /base.apk
 /research/official-apk/unpacked/
 /research/official-apk/badging.txt
