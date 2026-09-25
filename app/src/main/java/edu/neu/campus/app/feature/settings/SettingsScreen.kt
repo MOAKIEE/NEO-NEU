@@ -42,6 +42,7 @@ import top.yukonga.miuix.kmp.icon.extended.Theme
 @Composable
 fun SettingsScreen(
     onLoginClick: () -> Unit,
+    connectingAcademic: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -102,18 +103,24 @@ fun SettingsScreen(
                 CampusGroupDivider()
                 Spacer(Modifier.height(CampusSpacing.xs))
                 DomainStatusRow("统一门户", sessionState.portal)
-                DomainStatusRow("教务系统", sessionState.academic)
+                DomainStatusRow("教务系统", if (connectingAcademic) DomainStatus.AUTHENTICATING else sessionState.academic)
                 Spacer(Modifier.height(CampusSpacing.sm))
                 CampusButton(
-                    text = if (fullyConnected) "重新认证学校账号" else "登录学校账号",
+                    text = when {
+                        connectingAcademic -> "正在连接教务系统…"
+                        fullyConnected -> "重新认证学校账号"
+                        sessionState.portal == DomainStatus.READY -> "连接教务系统"
+                        else -> "登录学校账号"
+                    },
                     onClick = onLoginClick,
                     modifier = Modifier.fillMaxWidth(),
-                    primary = !fullyConnected
+                    primary = !fullyConnected,
+                    enabled = !connectingAcademic
                 )
                 Spacer(Modifier.height(CampusSpacing.xxs))
                 CampusRow(
                     title = if (checkingConnection) "正在检查连接…" else "检查连接",
-                    enabled = !checkingConnection && sessionState.accountScope != null,
+                    enabled = !checkingConnection && !connectingAcademic && sessionState.accountScope != null,
                     showChevron = true,
                     onClick = {
                         if (!checkingConnection) {
