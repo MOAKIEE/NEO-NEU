@@ -25,6 +25,8 @@ dependencies {
     implementation(project(":core:contract"))
     implementation(project(":data:repository"))
     implementation(project(":integration:auth-web"))
+    implementation(project(":integration:ecode"))
+    implementation("com.google.zxing:core:3.5.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     testImplementation("junit:junit:4.13.2")
 }

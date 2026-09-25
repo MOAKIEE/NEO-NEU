@@ -1,9 +1,5 @@
 package edu.neu.campus.app.registry
 
-import androidx.compose.ui.graphics.vector.ImageVector
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.basic.*
-
 enum class FeatureCategory(val displayName: String) {
     STUDY("学习"),
     CAMPUS_LIFE("校园生活"),
@@ -39,6 +35,11 @@ object FeatureRegistry {
     const val ID_BELL_SCHEDULE = "bell_schedule"
     const val ID_SCHEDULE_CALENDAR = "schedule_calendar"
     const val ID_SERVICES_CATALOG = "services_catalog"
+    const val ID_ECODE = "ecode"
+    const val ID_CARD_RECHARGE = "card_recharge"
+    const val ID_NETWORK_RECHARGE = "network_recharge"
+    const val ID_STUDENT_MAIL = "student_mail"
+    const val ID_PAYMENT_HALL = "payment_hall"
 
     val allFeatures: List<FeatureItem> = listOf(
         FeatureItem(
@@ -82,12 +83,56 @@ object FeatureRegistry {
             route = "campus_card"
         ),
         FeatureItem(
+            id = ID_ECODE,
+            title = "e 码通",
+            description = "学校动态二维码",
+            category = FeatureCategory.CAMPUS_LIFE,
+            searchAliases = listOf("二维码", "通行码", "ecode", "ematong", "码通"),
+            route = "ecode"
+        ),
+        FeatureItem(
+            id = ID_CARD_RECHARGE,
+            title = "校园卡充值",
+            description = "在学校官方网页办理",
+            category = FeatureCategory.CAMPUS_LIFE,
+            searchAliases = listOf("一卡通充值", "饭卡充值", "充饭卡"),
+            isNative = false,
+            route = "card_recharge"
+        ),
+        FeatureItem(
             id = ID_NETWORK,
             title = "网费余额",
             description = "校园网账户余额",
             category = FeatureCategory.CAMPUS_LIFE,
             searchAliases = listOf("校园网", "宽带", "网费", "上网", "wangfei", "wf", "xyw"),
             route = "network"
+        ),
+        FeatureItem(
+            id = ID_NETWORK_RECHARGE,
+            title = "网费充值",
+            description = "在学校官方网页办理",
+            category = FeatureCategory.CAMPUS_LIFE,
+            searchAliases = listOf("校园网充值", "宽带充值", "充网费"),
+            isNative = false,
+            route = "network_recharge"
+        ),
+        FeatureItem(
+            id = ID_STUDENT_MAIL,
+            title = "学生邮箱",
+            description = "打开学校邮件系统",
+            category = FeatureCategory.MESSAGES_AFFAIRS,
+            searchAliases = listOf("邮件", "邮箱", "收件箱", "mail", "coremail"),
+            isNative = false,
+            route = "student_mail"
+        ),
+        FeatureItem(
+            id = ID_PAYMENT_HALL,
+            title = "缴费服务大厅",
+            description = "打开学校缴费网页",
+            category = FeatureCategory.SERVICES,
+            searchAliases = listOf("缴费", "支付", "学费", "payment", "jiaofei"),
+            isNative = false,
+            route = "payment_hall"
         ),
         FeatureItem(
             id = ID_MESSAGES,

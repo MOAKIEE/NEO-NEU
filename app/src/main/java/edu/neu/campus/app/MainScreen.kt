@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
+import edu.neu.campus.app.feature.ecode.ECodeFloatingOverlay
+import edu.neu.campus.app.feature.ecode.ECodePreferences
 import edu.neu.campus.ui.theme.CampusMotion
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.NavigationBar
@@ -202,6 +204,9 @@ fun MainScreen(
                         }
                     }
                 }
+            }
+            if (destination == AppDestination.Main && currentTab == MainTab.TODAY && ECodePreferences.showFloatingBall) {
+                ECodeFloatingOverlay()
             }
         }
     }

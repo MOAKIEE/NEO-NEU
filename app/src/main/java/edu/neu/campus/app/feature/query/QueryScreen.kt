@@ -35,15 +35,14 @@ import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
-import edu.neu.campus.app.registry.FeatureItem
 import edu.neu.campus.app.registry.FeatureRegistry
+import edu.neu.campus.app.feature.services.OfficialService
 import edu.neu.campus.contract.BalanceKind
 import edu.neu.campus.ui.components.CampusButton
 import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPill
-import edu.neu.campus.ui.components.CampusRow
 import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusSearchField
 import edu.neu.campus.ui.components.CampusTopBar
@@ -60,6 +59,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Alarm
 import top.yukonga.miuix.kmp.icon.extended.BankCards
+import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Notes
@@ -76,7 +76,7 @@ import top.yukonga.miuix.kmp.icon.extended.Weeks
  * - 顶部统一搜索，支持名称、别名与拼音
  * - 学习查询：成绩与考试两张重点入口卡片，图标置上、功能色柔化渐变
  * - 常用工具：一个分组承载图标面板（图标底 50dp + 13sp 标签）
- * - 学校服务：独立入口卡片，标注「官方网页」，由用户主动前往浏览器
+ * - 学校服务：独立入口卡片；网页统一在应用内打开
  * - 搜索结果与默认面板之间使用横向淡入切换，避免闪烁
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -278,7 +278,12 @@ fun QueryScreen(
                                     ToolItem(FeatureRegistry.ID_TIMETABLE, "课表", MiuixIcons.Regular.Weeks, colors.timetableForeground, colors.timetableContainer),
                                     ToolItem(FeatureRegistry.ID_BELL_SCHEDULE, "校历作息", MiuixIcons.Regular.Months, colors.networkForeground, colors.networkContainer),
                                     ToolItem(FeatureRegistry.ID_CAMPUS_CARD, "校园卡", MiuixIcons.Regular.BankCards, colors.cardForeground, colors.cardContainer),
+                                    ToolItem(FeatureRegistry.ID_ECODE, "e 码通", MiuixIcons.Regular.GridView, colors.cardForeground, colors.cardContainer),
+                                    ToolItem(FeatureRegistry.ID_CARD_RECHARGE, "校园卡充值", MiuixIcons.Regular.BankCards, colors.cardForeground, colors.cardContainer),
                                     ToolItem(FeatureRegistry.ID_NETWORK, "网费", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer),
+                                    ToolItem(FeatureRegistry.ID_NETWORK_RECHARGE, "网费充值", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer),
+                                    ToolItem(FeatureRegistry.ID_STUDENT_MAIL, "学生邮箱", MiuixIcons.Regular.Messages, colors.messageForeground, colors.messageContainer),
+                                    ToolItem(FeatureRegistry.ID_PAYMENT_HALL, "缴费大厅", MiuixIcons.Regular.Store, colors.brand, colors.brandContainer),
                                     ToolItem(FeatureRegistry.ID_MESSAGES, "消息中心", MiuixIcons.Regular.Messages, colors.messageForeground, colors.messageContainer),
                                     ToolItem(FeatureRegistry.ID_TASKS, "待办申请", MiuixIcons.Regular.Tasks, colors.messageForeground, colors.messageContainer)
                                 )
@@ -478,7 +483,12 @@ private fun getFeatureIcon(id: String): ImageVector {
         FeatureRegistry.ID_TIMETABLE -> MiuixIcons.Regular.Weeks
         FeatureRegistry.ID_BELL_SCHEDULE -> MiuixIcons.Regular.Months
         FeatureRegistry.ID_CAMPUS_CARD -> MiuixIcons.Regular.BankCards
+        FeatureRegistry.ID_ECODE -> MiuixIcons.Regular.GridView
+        FeatureRegistry.ID_CARD_RECHARGE -> MiuixIcons.Regular.BankCards
         FeatureRegistry.ID_NETWORK -> MiuixIcons.Regular.Share
+        FeatureRegistry.ID_NETWORK_RECHARGE -> MiuixIcons.Regular.Share
+        FeatureRegistry.ID_STUDENT_MAIL -> MiuixIcons.Regular.Messages
+        FeatureRegistry.ID_PAYMENT_HALL -> MiuixIcons.Regular.Store
         FeatureRegistry.ID_MESSAGES -> MiuixIcons.Regular.Messages
         FeatureRegistry.ID_TASKS -> MiuixIcons.Regular.Tasks
         FeatureRegistry.ID_SERVICES_CATALOG -> MiuixIcons.Regular.Store
@@ -493,7 +503,12 @@ private fun navigateToFeature(featureId: String) {
         FeatureRegistry.ID_TIMETABLE -> AppNavigator.navigateToTab(MainTab.TIMETABLE)
         FeatureRegistry.ID_BELL_SCHEDULE -> AppNavigator.navigateTo(AppDestination.Schedule)
         FeatureRegistry.ID_CAMPUS_CARD -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.CAMPUS_CARD))
+        FeatureRegistry.ID_ECODE -> AppNavigator.navigateTo(AppDestination.ECode)
+        FeatureRegistry.ID_CARD_RECHARGE -> AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.CARD_RECHARGE))
         FeatureRegistry.ID_NETWORK -> AppNavigator.navigateTo(AppDestination.BalanceDetail(BalanceKind.NETWORK))
+        FeatureRegistry.ID_NETWORK_RECHARGE -> AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.NETWORK_RECHARGE))
+        FeatureRegistry.ID_STUDENT_MAIL -> AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.STUDENT_MAIL))
+        FeatureRegistry.ID_PAYMENT_HALL -> AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.PAYMENT_HALL))
         FeatureRegistry.ID_MESSAGES -> AppNavigator.navigateTo(AppDestination.Messages)
         FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.Tasks)
         FeatureRegistry.ID_SERVICES_CATALOG -> AppNavigator.navigateTo(AppDestination.ServicesCatalog)

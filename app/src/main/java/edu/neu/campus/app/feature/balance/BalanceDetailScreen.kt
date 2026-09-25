@@ -13,15 +13,18 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.navigation.AppDestination
+import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.feature.services.OfficialService
 import edu.neu.campus.contract.BalanceKind
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.ui.components.AnimatedNumber
 import edu.neu.campus.ui.components.CampusCard
+import edu.neu.campus.ui.components.CampusButton
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPageEnter
 import edu.neu.campus.ui.components.CampusTopBar
@@ -33,8 +36,6 @@ import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -233,6 +234,17 @@ fun BalanceDetailScreen(
                             }
                         }
                     }
+
+                    CampusButton(
+                        text = if (isCard) "校园卡充值" else "网费充值",
+                        onClick = {
+                            AppNavigator.navigateTo(AppDestination.OfficialWeb(
+                                if (isCard) OfficialService.CARD_RECHARGE else OfficialService.NETWORK_RECHARGE
+                            ))
+                        },
+                        primary = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
                     // 加载/异常
                     if (balanceSnapshot.phase == QueryPhase.FAILED) {

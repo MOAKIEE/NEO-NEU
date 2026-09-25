@@ -10,7 +10,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
 import edu.neu.campus.app.config.HomeLayoutConfigManager
+import edu.neu.campus.app.feature.ecode.ECodePreferences
+import edu.neu.campus.app.feature.ecode.ECodeScreen
+import edu.neu.campus.app.feature.services.OfficialWebScreen
 import edu.neu.campus.app.feature.exams.ExamDetailScreen
 import edu.neu.campus.app.feature.exams.ExamsScreen
 import edu.neu.campus.app.feature.grades.GradeDetailScreen
@@ -21,6 +25,8 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.authweb.OfficialLogin
 import edu.neu.campus.authweb.AcademicSsoConnector
+import edu.neu.campus.ecode.ECodeSsoConnector
+import edu.neu.campus.ecode.OfficialECodeRepository
 import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.ui.theme.CampusTheme
@@ -36,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private var openLoginAfterReconnect = false
     private var lastAutomaticReconnectScope: String? = null
     private var lastAutomaticReconnectAt = 0L
+    private var lastECodeWarmScope: String? = null
     private var connectingAcademic by mutableStateOf(false)
 
     private val loginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -58,6 +65,7 @@ class MainActivity : ComponentActivity() {
         CampusDataProvider.init(this)
         ThemeManager.init(this)
         HomeLayoutConfigManager.init(this)
+        ECodePreferences.init(this)
         edu.neu.campus.app.feature.balance.BalancePrivacyManager.init(this)
         edu.neu.campus.app.feature.messages.MessagesManager.init(this)
         if (!authCoordinator.suppressResume() && CampusDataProvider.session.state.value.accountScope != null) {
@@ -71,6 +79,7 @@ class MainActivity : ComponentActivity() {
                 val destination = AppNavigator.currentDestination
                 LaunchedEffect(session.accountScope, session.portal, session.academic) {
                     maybeReconnectAcademic()
+                    maybeWarmECode()
                 }
                 LaunchedEffect(session.accountScope, tab, destination) {
                     CampusDataProvider.sync.requestVisible(tab, destination, SyncReason.PAGE_ENTER)
@@ -178,6 +187,12 @@ class MainActivity : ComponentActivity() {
                                     onBack = { AppNavigator.popBack() }
                                 )
                             }
+                            is AppDestination.ECode -> {
+                                ECodeScreen(onBack = { AppNavigator.popBack() })
+                            }
+                            is AppDestination.OfficialWeb -> {
+                                OfficialWebScreen(service = dest.service, onBack = { AppNavigator.popBack() })
+                            }
                             is AppDestination.HomeSettings -> {
                                 edu.neu.campus.app.feature.settings.HomeConfigScreen(
                                     onBack = { AppNavigator.popBack() }
@@ -230,6 +245,24 @@ class MainActivity : ComponentActivity() {
         reconnectAcademic(openLoginOnFailure = false)
     }
 
+    private fun maybeWarmECode() {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        val state = CampusDataProvider.session.state.value
+        val scope = state.accountScope ?: return
+        if (state.portal != DomainStatus.READY || state.academic != DomainStatus.READY ||
+            lastECodeWarmScope == scope) return
+        lastECodeWarmScope = scope
+        lifecycleScope.launch {
+            try {
+                ECodeSsoConnector.warm(this@MainActivity, OfficialECodeRepository(this@MainActivity))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // The e-code page keeps its own visible authentication fallback.
+            }
+        }
+    }
+
     private fun reconnectAcademic(openLoginOnFailure: Boolean) {
         if (academicReconnectJob?.isActive == true) {
             openLoginAfterReconnect = openLoginAfterReconnect || openLoginOnFailure
@@ -276,6 +309,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        maybeWarmECode()
         // First resume is coalesced with the initial route event by SyncCoordinator.
         if (!authCoordinator.suppressResume()) lifecycleScope.launch {
             CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.FOREGROUND)

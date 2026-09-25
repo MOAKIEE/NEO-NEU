@@ -2,6 +2,7 @@ package edu.neu.campus.app.navigation
 
 import androidx.compose.runtime.*
 import edu.neu.campus.contract.BalanceKind
+import edu.neu.campus.app.feature.services.OfficialService
 
 enum class MainTab(val title: String) {
     TODAY("今日"),
@@ -24,6 +25,8 @@ sealed interface AppDestination {
     data object Schedule : AppDestination
     data object BellSchedule : AppDestination
     data object ServicesCatalog : AppDestination
+    data object ECode : AppDestination
+    data class OfficialWeb(val service: OfficialService) : AppDestination
     data object HomeSettings : AppDestination
 }
 
