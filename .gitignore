@@ -1,5 +1,7 @@
 # Third-party research checkout; use the pinned upstream references in docs.
 /research/miuix-source/
+/research/academic-source/
+/research/portal-source/
 /base.apk
 /research/official-apk/unpacked/
 /research/official-apk/badging.txt

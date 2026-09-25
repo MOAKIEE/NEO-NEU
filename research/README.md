@@ -7,14 +7,14 @@
 | `apk-metadata.json` | 原 APK 的名称、包名、版本与声明权限；不是新版配置 |
 | `official-apk/` | 官方 APK 的本机解包内容及可读包信息；根目录 `base.apk` 保留供模拟器安装 |
 | `official-app-cookie-runtime-2026-09-24.md` | 官方教务 WebView 入口、Cookie 属性与同账号字段的脱敏运行时核验 |
-| `academic-source/` | 学校教务页面公开脚本快照，用于核对查询方法、参数及返回值消费 |
-| `portal-source/` | 门户公开脚本快照，用于核对余额、消息、日程与服务目录 |
+| `academic-source/` | 学校教务页面脚本快照，仅在本机保留，不纳入 Git |
+| `portal-source/` | 门户页面脚本快照，仅在本机保留，不纳入 Git |
 | `public-web/entry-observations.json` | 未登录访问链路和表单字段名记录，不包含已登录会话 |
 | `public-web/miuix-release.json` | 研究时的 Miuix Release 信息 |
 | `public-web/miuix-0.9.4.pom` | 发布依赖证据 |
 | `public-web/miuix-aar-metadata.json` | Android 制品最低系统与编译 SDK 要求 |
 
-网页脚本中可能同时存在写操作、其他角色或通用产品逻辑；它们不是首版需求，不得据此扩大范围。实际响应仍未回放确认的部分，以接口文档中的标注为准。
+本机网页脚本中可能同时存在写操作、其他角色或通用产品逻辑；它们不是首版需求，不得据此扩大范围。实际响应仍未回放确认的部分，以接口文档中的标注为准。脚本快照属于学校网页的第三方代码，已退出 Git 跟踪；需要复核时从学校公开网页重新取得。
 
 研究日期：2026-09-22。过时方案、临时下载脚本、重复摘录与原 APK 字符串已清理。根目录的 `base.apk` 是官方客户端参考样本，未被 Git 跟踪，也不是构建输入；本机保留供模拟器安装，解包说明见 [official-apk](official-apk/README.md)。网页与组件库材料可从文档固定来源取得。
 
