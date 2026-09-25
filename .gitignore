@@ -1,6 +1,9 @@
 # Third-party research checkout; use the pinned upstream references in docs.
 /research/miuix-source/
 /base.apk
+/research/official-apk/unpacked/
+/research/official-apk/badging.txt
+/research/official-apk/manifest-tree.txt
 /.gradle/
 /local.properties
 /**/build/
@@ -9,4 +12,3 @@
 *.hprof
 /.cxx/
 screenshot_*.png
-
