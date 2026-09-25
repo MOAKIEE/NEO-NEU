@@ -44,7 +44,7 @@ fun CourseDetailBottomSheet(
         startAction = { CampusSheetCloseAction(onClick = onDismiss) }
     ) {
         if (course != null) {
-            val (courseAccentColor, _) = colors.courseColor(course.title)
+            val (courseAccentColor, _) = colors.courseColor(course.colorKey())
 
             Column(
                 modifier = Modifier

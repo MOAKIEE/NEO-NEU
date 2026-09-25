@@ -35,6 +35,7 @@ import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.app.registry.FeatureRegistry
 import edu.neu.campus.contract.*
+import edu.neu.campus.ui.timetable.colorKey
 import edu.neu.campus.ui.components.*
 import edu.neu.campus.ui.theme.CampusMotion
 import edu.neu.campus.ui.theme.CampusShapes
@@ -433,8 +434,8 @@ fun TodayScreen(
                             ) {
                                 CampusIconBadge(
                                     icon = MiuixIcons.Regular.Notes,
-                                    tint = colors.courseAccent(c.title),
-                                    container = colors.courseColor(c.title).second
+                                    tint = colors.courseAccent(c.colorKey()),
+                                    container = colors.courseColor(c.colorKey()).second
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(

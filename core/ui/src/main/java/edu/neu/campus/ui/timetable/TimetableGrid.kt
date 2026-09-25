@@ -1,289 +1,321 @@
 package edu.neu.campus.ui.timetable
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import edu.neu.campus.contract.*
-import edu.neu.campus.ui.components.StaggeredAppear
-import edu.neu.campus.ui.components.rememberSchoolClock
+import edu.neu.campus.contract.CourseOccurrence
 import edu.neu.campus.ui.components.tapScale
-import edu.neu.campus.ui.theme.CampusMotion
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Text
-import java.text.SimpleDateFormat
-import java.util.*
+import kotlin.math.abs
 
-/** Individual section rows prevent adjacent single-section courses becoming false conflicts. */
-fun coursesAtSection(courses: List<CourseOccurrence>, day: Int, section: Int) =
-    courses.filter { it.dayOfWeek == day && section in it.beginSection..it.endSection }
-
-/** Connected overlapping section ranges; adjacent lessons stay separate. */
-fun courseBlocksForDay(courses: List<CourseOccurrence>, day: Int): List<List<CourseOccurrence>> {
-    val blocks = mutableListOf<MutableList<CourseOccurrence>>()
-    for (course in courses.filter { it.dayOfWeek == day }.sortedBy { it.beginSection }) {
-        val previous = blocks.lastOrNull()
-        if (previous != null && course.beginSection <= previous.maxOf { it.endSection }) previous.add(course)
-        else blocks.add(mutableListOf(course))
-    }
-    return blocks
-}
-
-private val AxisWidth = 46.dp
-private val DayWidth = 88.dp
-private val SectionHeight = 96.dp
+private val AxisWidth = 34.dp
+private val HeaderHeight = 54.dp
+private val SectionHeight = 62.dp
+private val BlockGap = 2.dp
+private val BlockPaddingH = 4.dp
+private val BlockPaddingV = 5.dp
+private val SwipeThreshold = 72.dp
 
 /**
  * 课表网格 (TimetableGrid)。
  *
- * 视觉约定：
- * - 表头使用表面色，今日列以品牌浅底 + 圆角高亮，日期文字同色强调
- * - 左侧节次轴独立宽度，与课程区共享同一纵向滚动
- * - 课程块为功能色容器 + 左侧强调色条，按压有缩放反馈
- * - 课块在首次挂载时按列交错淡入
+ * 布局约定：
+ * - 星期列按可用宽度均分，表头与表体使用同一列宽，保证星期、日期与课块逐列对齐
+ * - 列顺序与日期取自 [TimetableLayout.days]，由教学周真实日期推算，兼容以周日为一周起点的学校配置
+ * - 网格线与今日列底色在一次 `drawBehind` 中绘制；课块只做定位，不做逐块入场动画，切换页面不再掉帧
+ * - 左右滑动表体切换教学周（[onSwipeWeek] 传入 -1 / +1），纵向滚动与标题栏折叠互不干扰
  */
 @Composable
 fun TimetableGrid(
-    courses: List<CourseOccurrence>, currentWeek: TeachingWeek?,
-    sections: List<Section> = emptyList(),
+    layout: TimetableLayout,
+    today: String?,
     onCourseClick: (CourseOccurrence) -> Unit,
     onConflictClick: (List<CourseOccurrence>) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrollState: ScrollState = rememberScrollState(),
+    overlayMessage: String? = null,
+    onSwipeWeek: ((Int) -> Unit)? = null
 ) {
     val colors = CampusTheme.colors
-    val schoolClock = rememberSchoolClock()
-    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Shanghai"); isLenient = false
-    }
-    val today = formatter.format(schoolClock.time)
-    val dates = remember(currentWeek?.startDate) {
-        runCatching {
-            val first = formatter.parse(currentWeek?.startDate.orEmpty()) ?: return@runCatching emptyList<String>()
-            val calendar = Calendar.getInstance(formatter.timeZone).apply { time = first }
-            (1..7).map { formatter.format(calendar.time).also { calendar.add(Calendar.DATE, 1) } }
-        }.getOrDefault(emptyList())
-    }
-    val numbers = (sections.mapNotNull { it.code.toIntOrNull() } +
-        courses.flatMap { (it.beginSection..it.endSection).toList() }).distinct().sorted()
-    val horizontal = rememberScrollState()
-    val vertical = rememberScrollState()
 
-    if (numbers.isEmpty()) {
-        Text(
-            text = "暂无可显示的节次信息",
-            modifier = modifier.fillMaxWidth().padding(CampusSpacing.screenHorizontal),
-            color = colors.textSecondary,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center
-        )
+    if (layout.sections.isEmpty()) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = overlayMessage ?: "暂无可显示的节次信息",
+                modifier = Modifier.padding(CampusSpacing.screenHorizontal),
+                color = colors.textSecondary,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+        }
         return
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.surface)
-    ) {
-        // 表头
-        Row(modifier = Modifier.background(colors.surface)) {
+    val todayColumn = layout.days.indexOfFirst { it.date != null && it.date == today }
+    // 回调随重组更新，但手势检测器不能因此重启，否则滑动到一半会被打断。
+    val latestOnSwipe by rememberUpdatedState(onSwipeWeek)
+    val swipeModifier = if (onSwipeWeek != null) {
+        Modifier.pointerInput(Unit) {
+            var total = 0f
+            val threshold = SwipeThreshold.toPx()
+            detectHorizontalDragGestures(
+                onDragStart = { total = 0f },
+                onDragEnd = { if (abs(total) > threshold) latestOnSwipe?.invoke(if (total < 0) 1 else -1) },
+                onHorizontalDrag = { change, amount ->
+                    total += amount
+                    change.consume()
+                }
+            )
+        }
+    } else Modifier
+
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val dayWidth = (maxWidth - AxisWidth) / layout.days.size
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            GridHeader(layout = layout, todayColumn = todayColumn, dayWidth = dayWidth)
+
             Box(
                 modifier = Modifier
-                    .width(AxisWidth)
-                    .height(58.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "节次",
-                    fontSize = 12.sp,
-                    color = colors.textTertiary
-                )
-            }
-            Row(
-                modifier = Modifier
+                    .fillMaxWidth()
                     .weight(1f)
-                    .horizontalScroll(horizontal)
+                    .then(swipeModifier)
             ) {
-                (1..7).forEach { day ->
-                    val date = dates.getOrNull(day - 1)
-                    val isToday = date == today
-                    val headerColor by animateColorAsState(
-                        targetValue = if (isToday) colors.brandContainer else Color.Transparent,
-                        animationSpec = tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.standard),
-                        label = "dayHeaderColor"
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                ) {
+                    val lineColor = colors.divider
+                    val todayTint = colors.brandContainer.copy(alpha = if (colors.isDark) 0.35f else 0.45f)
                     Box(
                         modifier = Modifier
-                            .width(DayWidth)
-                            .heightIn(min = 58.dp)
-                            .padding(horizontal = 3.dp, vertical = 4.dp)
-                            .clip(RoundedCornerShape(CampusShapes.extraSmall))
-                            .background(headerColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "周${dayOfWeekText(day)}",
-                                fontSize = 13.sp,
-                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isToday) colors.brand else colors.textPrimary
-                            )
-                            Text(
-                                text = date?.takeLast(5) ?: "日期待确认",
-                                fontSize = 11.sp,
-                                color = if (isToday) colors.brand else colors.textTertiary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(colors.divider)
-        )
-
-        // 网格主体
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(vertical)
-        ) {
-            // 节次轴
-            Column(modifier = Modifier.width(AxisWidth)) {
-                numbers.forEach { number ->
-                    Box(
-                        modifier = Modifier
-                            .height(SectionHeight)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = number.toString(),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textTertiary
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(horizontal)
-            ) {
-                (1..7).forEach { day ->
-                    val date = dates.getOrNull(day - 1)
-                    val isToday = date == today
-                    val columnBg by animateColorAsState(
-                        targetValue = if (isToday) colors.brandContainer.copy(alpha = 0.28f) else Color.Transparent,
-                        animationSpec = tween(CampusMotion.Duration.medium, easing = CampusMotion.Easing.standard),
-                        label = "dayColumnColor"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(DayWidth)
-                            .height((SectionHeight.value * numbers.size).dp)
-                            .background(columnBg)
-                    ) {
-                        courseBlocksForDay(courses, day).forEachIndexed { blockIndex, matched ->
-                            val firstSection = matched.minOf { it.beginSection }
-                            val lastSection = matched.maxOf { it.endSection }
-                            val startRow = numbers.indexOf(firstSection)
-                            val rowCount = numbers.indexOf(lastSection) - startRow + 1
-                            val course = matched.first()
-                            val (fg, bg) = colors.courseColor(course.sourceId ?: "${course.campusId}:${course.title}")
-
-                            StaggeredAppear(index = day + blockIndex, key = currentWeek?.number) {
-                                Box(
-                                    modifier = Modifier
-                                        .offset(y = (SectionHeight * startRow))
-                                        .height(SectionHeight * rowCount)
-                                        .fillMaxWidth()
-                                        .padding(3.dp)
-                                        .tapScale(onClick = {
-                                                if (matched.size > 1) onConflictClick(matched) else onCourseClick(course)
-                                            },
-                                            pressedScale = 0.96f, clipShape = RoundedCornerShape(CampusShapes.small))
-                                        .background(bg)
-                                        .border(
-                                            width = 1.dp,
-                                            color = fg.copy(alpha = 0.16f),
-                                            shape = RoundedCornerShape(CampusShapes.small)
-                                        )
-                                ) {
-                                    Row(modifier = Modifier.fillMaxSize()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(3.dp)
-                                                .fillMaxHeight()
-                                                .background(fg)
-                                        )
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(horizontal = 6.dp, vertical = 5.dp),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            if (matched.size > 1) {
-                                                Text(
-                                                    text = "${matched.size} 项安排",
-                                                    color = fg,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            } else {
-                                                Text(
-                                                    text = course.title,
-                                                    color = fg,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    maxLines = 3,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    text = course.place ?: "地点未提供",
-                                                    color = fg.copy(alpha = 0.82f),
-                                                    fontSize = 11.sp,
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-                                    }
+                            .fillMaxWidth()
+                            .height(SectionHeight * layout.sections.size)
+                            .drawBehind {
+                                val axis = AxisWidth.toPx()
+                                val column = dayWidth.toPx()
+                                val row = SectionHeight.toPx()
+                                if (todayColumn >= 0) {
+                                    drawRect(
+                                        color = todayTint,
+                                        topLeft = Offset(axis + column * todayColumn, 0f),
+                                        size = Size(column, size.height)
+                                    )
                                 }
+                                val stroke = 0.5.dp.toPx()
+                                for (i in 1 until layout.sections.size) {
+                                    drawLine(lineColor, Offset(axis, row * i), Offset(size.width, row * i), stroke)
+                                }
+                            }
+                    ) {
+                        SectionAxis(layout.sections)
+                        layout.blocks.forEach { block ->
+                            key(block.column, block.startRow) {
+                                CourseBlockCell(
+                                    block = block,
+                                    onClick = {
+                                        if (block.isConflict) onConflictClick(block.courses)
+                                        else onCourseClick(block.courses.first())
+                                    },
+                                    modifier = Modifier
+                                        .offset(x = AxisWidth + dayWidth * block.column, y = SectionHeight * block.startRow)
+                                        .size(width = dayWidth, height = SectionHeight * block.rowSpan)
+                                        .padding(BlockGap)
+                                )
                             }
                         }
                     }
+                }
+
+                if (overlayMessage != null) {
+                    Text(
+                        text = overlayMessage,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(start = AxisWidth)
+                            .clip(RoundedCornerShape(CampusShapes.pill))
+                            .background(colors.surfaceMuted)
+                            .padding(horizontal = CampusSpacing.md, vertical = CampusSpacing.xs),
+                        color = colors.textSecondary,
+                        fontSize = 13.sp
+                    )
                 }
             }
         }
     }
 }
 
-fun dayOfWeekText(day: Int): String = listOf("一", "二", "三", "四", "五", "六", "日").getOrNull(day - 1) ?: day.toString()
+@Composable
+private fun GridHeader(layout: TimetableLayout, todayColumn: Int, dayWidth: Dp) {
+    val colors = CampusTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(HeaderHeight)
+            .drawBehind {
+                drawLine(colors.divider, Offset(0f, size.height), Offset(size.width, size.height), 1f)
+            },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.width(AxisWidth), contentAlignment = Alignment.Center) {
+            val month = layout.days.firstOrNull { it.month != null }?.month
+            Text(
+                text = if (month != null) "${month}月" else "节",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textTertiary
+            )
+        }
+        layout.days.forEachIndexed { index, day ->
+            val isToday = index == todayColumn
+            Column(
+                modifier = Modifier.width(dayWidth),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "周${dayOfWeekText(day.dayOfWeek)}",
+                    fontSize = 12.sp,
+                    fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isToday) colors.brand else colors.textSecondary,
+                    maxLines = 1
+                )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(if (isToday) colors.brand else colors.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = day.dayOfMonth?.toString() ?: "–",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isToday) colors.onBrand else colors.textPrimary,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionAxis(sections: List<SectionSlot>) {
+    val colors = CampusTheme.colors
+    Column(modifier = Modifier.width(AxisWidth)) {
+        sections.forEach { slot ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(SectionHeight),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = slot.number.toString(),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textSecondary
+                )
+                slot.startTime?.let {
+                    Text(text = it, fontSize = 9.sp, lineHeight = 11.sp, color = colors.textTertiary, maxLines = 1)
+                }
+                slot.endTime?.let {
+                    Text(text = it, fontSize = 9.sp, lineHeight = 11.sp, color = colors.textTertiary, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CourseBlockCell(
+    block: TimetableBlock,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = CampusTheme.colors
+    val course = block.courses.first()
+    val (foreground, container) = colors.courseColor(course.colorKey())
+    val fontScale = LocalDensity.current.fontScale
+
+    // 按课块可用高度计算行数，避免文字被硬裁一半。
+    val innerHeight = SectionHeight.value * block.rowSpan - (BlockGap.value + BlockPaddingV.value) * 2
+    val placeLines = when {
+        course.place.isNullOrBlank() || block.isConflict -> 0
+        block.rowSpan >= 2 -> 2
+        else -> 1
+    }
+    val titleLines = ((innerHeight - placeLines * 13f * fontScale - 2f) / (14f * fontScale)).toInt().coerceAtLeast(1)
+
+    Box(
+        modifier = modifier
+            .tapScale(onClick = onClick, pressedScale = 0.95f, clipShape = RoundedCornerShape(CampusShapes.extraSmall))
+            .background(container)
+            .padding(horizontal = BlockPaddingH, vertical = BlockPaddingV)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = if (block.isConflict) block.courses.joinToString(" / ") { it.title } else course.title,
+                color = foreground,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = titleLines,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (placeLines > 0) {
+                Text(
+                    text = "@${course.place}",
+                    color = foreground.copy(alpha = 0.78f),
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp,
+                    maxLines = placeLines,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (block.isConflict) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(foreground),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = block.courses.size.toString(),
+                    color = container,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
