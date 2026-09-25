@@ -122,7 +122,6 @@ fun GradesScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "成绩查询",
-            subtitle = activeTermId.ifBlank { "官方原始成绩与绩点" },
             onBack = onBack
         )
 
@@ -190,12 +189,9 @@ fun GradesScreen(
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
                             }
-                            val scopeText = gradeSummarySnapshot.data?.scope ?: "学校返回统计值"
-                            Text(
-                                text = "$scopeText · 最近同步 ${TimeFormatter.formatTime(gradeSummarySnapshot.lastSuccessEpochMillis)}",
-                                fontSize = 11.sp,
-                                color = colors.textSecondary
-                            )
+                            gradeSummarySnapshot.data?.scope?.let { scope ->
+                                Text(text = scope, fontSize = 11.sp, color = colors.textSecondary)
+                            }
                         }
 
                         CampusIconBadge(
@@ -278,23 +274,15 @@ fun GradesScreen(
 
             // 5. 成绩列表标题
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "课程成绩 (${filteredGrades.size} 门)",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.textPrimary
-                    )
-                    SafeDataTag(
-                        sourceName = "教务系统",
-                        lastSuccessEpochMillis = gradesSnapshot?.lastSuccessEpochMillis,
-                        isStale = gradesSnapshot?.isStale ?: false
-                    )
-                }
+                Text(
+                    text = "课程成绩 (${filteredGrades.size} 门)",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary
+                )
+            }
+            if (gradesSnapshot?.isStale == true) item {
+                SafeDataTag(text = "课程成绩旧缓存 · 最近同步 ${TimeFormatter.formatDateTime(gradesSnapshot?.lastSuccessEpochMillis)}")
             }
 
             if (filteredGrades.isEmpty() && gradesSnapshot?.phase == QueryPhase.READY) {

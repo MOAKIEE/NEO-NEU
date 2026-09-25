@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.contract.CourseOccurrence
 import edu.neu.campus.ui.components.CampusSheetCloseAction
-import edu.neu.campus.ui.components.SafeDataTag
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Text
@@ -25,14 +24,12 @@ import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
  * 组件约定：
  * - 顶部细色条与课块颜色一致
  * - 依次展示时间节次、上课地点与校区、任课教师、学校排课安排说明及其他时段排课
- * - 来源与同步时间严格遵循只读真实数据口径
  */
 @Composable
 fun CourseDetailBottomSheet(
     course: CourseOccurrence?,
     otherOccurrences: List<CourseOccurrence> = emptyList(),
     campusName: String? = null,
-    lastUpdatedTime: Long? = null,
     onDismiss: () -> Unit
 ) {
     val colors = CampusTheme.colors
@@ -131,7 +128,7 @@ fun CourseDetailBottomSheet(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "任课教师及信息",
+                        text = "任课教师",
                         fontSize = 13.sp,
                         color = colors.textSecondary
                     )
@@ -140,13 +137,6 @@ fun CourseDetailBottomSheet(
                         fontSize = 15.sp,
                         color = colors.textPrimary
                     )
-                    if (!course.sourceId.isNullOrBlank()) {
-                        Text(
-                            text = "课程记录标识：${course.sourceId}",
-                            fontSize = 12.sp,
-                            color = colors.textSecondary
-                        )
-                    }
                 }
 
                 // 4. 本课程其他安排
@@ -185,12 +175,6 @@ fun CourseDetailBottomSheet(
                     }
                 }
 
-                // 5. 来源与同步时间
-                SafeDataTag(
-                    sourceName = "教务系统",
-                    lastSuccessEpochMillis = lastUpdatedTime,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-                )
             }
         }
     }

@@ -99,7 +99,6 @@ fun TasksScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "待办与申请",
-            subtitle = "待办与申请状态（只读）",
             onBack = onBack,
             actions = {
                 IconButton(
@@ -267,24 +266,8 @@ private fun TaskItemCard(
                     maxLines = 2
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
-                ) {
-                    Text(
-                        text = "来源：智慧东大办公门户",
-                        fontSize = 12.sp,
-                        color = campusColors.textSecondary
-                    )
-
-                    val tTime = task.time
-                    if (tTime != null) {
-                        Text(
-                            text = tTime,
-                            fontSize = 12.sp,
-                            color = campusColors.textTertiary
-                        )
-                    }
+                task.time?.let { tTime ->
+                    Text(text = tTime, fontSize = 12.sp, color = campusColors.textTertiary)
                 }
             }
 
@@ -328,16 +311,10 @@ private fun SchemaChangedCard(context: Context) {
                 }
 
                 Text(
-                    text = "待办事项暂时无法在此显示。请前往学校官方门户查看和办理。",
+                    text = "请前往学校官方门户查看和办理。",
                     fontSize = 13.sp,
                     color = campusColors.textPrimary,
                     lineHeight = 20.sp
-                )
-
-                Text(
-                    text = "你可以在官方门户查看或处理审批事务。",
-                    fontSize = 12.sp,
-                    color = campusColors.textSecondary
                 )
 
                 Row(
@@ -415,8 +392,6 @@ private fun TaskDetailDialog(
                     CampusGroupDivider()
                     DetailRow(label = "来源系统", value = "智慧东大办公门户")
                 }
-
-                SafeDataTag(text = "只读展示 · 请前往官方系统办理")
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

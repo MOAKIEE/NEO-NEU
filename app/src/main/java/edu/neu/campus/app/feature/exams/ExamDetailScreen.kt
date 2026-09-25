@@ -25,7 +25,6 @@ import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusRow
 import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusTopBar
-import edu.neu.campus.ui.components.SafeDataTag
 import edu.neu.campus.ui.components.StaggeredAppear
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
@@ -38,7 +37,7 @@ import top.yukonga.miuix.kmp.basic.Text
  *
  * 约定：
  * - 主卡使用考试功能色柔化渐变，考场与座位使用等宽信息块
- * - 未安排考试不展示考场网格，仅保留状态与来源说明
+ * - 未安排考试不展示考场网格，仅保留状态
  */
 @Composable
 fun ExamDetailScreen(
@@ -63,7 +62,6 @@ fun ExamDetailScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "考试详情",
-            subtitle = if (exam?.arranged == true) "已安排考试" else "未安排考试",
             onBack = onBack
         )
 
@@ -214,13 +212,6 @@ fun ExamDetailScreen(
                             }
                         }
                     }
-
-                    // 3. 来源说明
-                    SafeDataTag(
-                        sourceName = "教务系统",
-                        lastSuccessEpochMillis = examsSnapshot.lastSuccessEpochMillis,
-                        modifier = Modifier.padding(top = CampusSpacing.xxs)
-                    )
 
                     Spacer(modifier = Modifier.height(CampusSpacing.md))
                 }

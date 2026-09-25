@@ -31,6 +31,7 @@ import edu.neu.campus.ui.components.CampusEmptyHint
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.components.TimeFormatter
 import edu.neu.campus.ui.components.StaggeredAppear
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
@@ -107,8 +108,7 @@ fun ExamsScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "考试安排",
-            onBack = onBack,
-            subtitle = "已安排与未安排考试"
+            onBack = onBack
         )
 
         LazyColumn(
@@ -124,23 +124,14 @@ fun ExamsScreen(
             // 1. 学期选择与更新状态
             item {
                 StaggeredAppear(index = 0) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CampusFilterChip(
-                            text = currentTerm?.name ?: "选择学期",
-                            onClick = { showTermPicker = true }
-                        )
-
-                        SafeDataTag(
-                            sourceName = "教务系统",
-                            lastSuccessEpochMillis = examsSnapshot?.lastSuccessEpochMillis,
-                            isStale = examsSnapshot?.isStale ?: false
-                        )
-                    }
+                    CampusFilterChip(
+                        text = currentTerm?.name ?: "选择学期",
+                        onClick = { showTermPicker = true }
+                    )
                 }
+            }
+            if (examsSnapshot?.isStale == true) item {
+                SafeDataTag(text = "考试安排旧缓存 · 最近同步 ${TimeFormatter.formatDateTime(examsSnapshot?.lastSuccessEpochMillis)}")
             }
 
             // 2. 分段切换药丸：【已安排 (N)】 / 【未安排 (N)】
@@ -196,12 +187,6 @@ fun ExamsScreen(
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = colors.textPrimary
-                                )
-                                Text(
-                                    text = "当前查询未返回已安排考试，可查看“未安排”选项",
-                                    fontSize = 13.sp,
-                                    color = colors.textSecondary,
-                                    modifier = Modifier.padding(top = CampusSpacing.xs - 2.dp)
                                 )
                             }
                         }

@@ -47,6 +47,7 @@ import edu.neu.campus.ui.components.CampusSheetCloseAction
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.components.TimeFormatter
 import edu.neu.campus.ui.components.rememberSchoolToday
 import edu.neu.campus.ui.components.tapScale
 import edu.neu.campus.ui.theme.CampusMotion
@@ -368,54 +369,47 @@ fun TimetableScreen(
             }
         }
 
-        // 底部来源与未排课提示（与页面同底色，仅用分隔线区隔，避免多出一条白色色带）
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(colors.divider)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val unscheduledCount = (table?.unscheduled?.size ?: 0) + (table?.practice?.size ?: 0)
-            if (unscheduledCount > 0) {
-                Row(
-                    modifier = Modifier
-                        .tapScale(onClick = { showMoreSheet = true }, pressedScale = 0.95f, clipShape = RoundedCornerShape(CampusShapes.pill))
-                        .padding(vertical = 4.dp, horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "未排课 $unscheduledCount 项",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.brand
-                    )
-                    Icon(
-                        imageVector = MiuixIcons.Basic.ArrowRight,
-                        contentDescription = null,
-                        tint = colors.brand,
-                        modifier = Modifier.size(13.dp)
-                    )
+        val unscheduledCount = (table?.unscheduled?.size ?: 0) + (table?.practice?.size ?: 0)
+        if (unscheduledCount > 0 || isSyncing || timetableSnapshot?.isStale == true) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(colors.divider)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (unscheduledCount > 0) {
+                    Row(
+                        modifier = Modifier
+                            .tapScale(onClick = { showMoreSheet = true }, pressedScale = 0.95f, clipShape = RoundedCornerShape(CampusShapes.pill))
+                            .padding(vertical = 4.dp, horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "未排课 $unscheduledCount 项",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.brand
+                        )
+                        Icon(
+                            imageVector = MiuixIcons.Basic.ArrowRight,
+                            contentDescription = null,
+                            tint = colors.brand,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
                 }
-            } else {
-                Spacer(modifier = Modifier.width(1.dp))
-            }
-
-            if (isSyncing) {
-                SafeDataTag(text = "正在同步…")
-            } else {
-                SafeDataTag(
-                    sourceName = "教务系统",
-                    lastSuccessEpochMillis = timetableSnapshot?.lastSuccessEpochMillis,
-                    isStale = timetableSnapshot?.isStale ?: false
-                )
+                if (isSyncing) SafeDataTag(text = "正在同步…")
+                else if (timetableSnapshot?.isStale == true) {
+                    SafeDataTag(text = "课表旧缓存 · 最近同步 ${TimeFormatter.formatDateTime(timetableSnapshot?.lastSuccessEpochMillis)}")
+                }
             }
         }
     }
@@ -427,7 +421,6 @@ fun TimetableScreen(
             course = c,
             otherOccurrences = others,
             campusName = campuses.firstOrNull { it.id == c.campusId }?.name,
-            lastUpdatedTime = timetableSnapshot?.lastSuccessEpochMillis,
             onDismiss = { inspectingCourse = null }
         )
     }
@@ -601,19 +594,13 @@ fun TimetableScreen(
                             tint = colors.brand,
                             container = colors.brandContainer
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "查看校区作息时间",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = colors.textPrimary
-                            )
-                            Text(
-                                text = "按学校返回的节次时间展示",
-                                fontSize = 12.sp,
-                                color = colors.textSecondary
-                            )
-                        }
+                        Text(
+                            text = "查看校区作息时间",
+                            modifier = Modifier.weight(1f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textPrimary
+                        )
                         Icon(
                             imageVector = MiuixIcons.Basic.ArrowRight,
                             contentDescription = null,

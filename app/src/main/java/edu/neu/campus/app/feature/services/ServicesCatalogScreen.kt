@@ -24,7 +24,6 @@ import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusTopBar
-import edu.neu.campus.ui.components.SafeDataTag
 import edu.neu.campus.ui.components.StaggeredAppear
 import edu.neu.campus.ui.components.tapScale
 import edu.neu.campus.ui.theme.CampusSpacing
@@ -71,13 +70,8 @@ fun ServicesCatalogScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "学校服务目录",
-            subtitle = "学校官方入口（浏览器打开）",
             onBack = onBack
         )
-
-        Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs)) {
-            SafeDataTag(text = "学校服务将在系统浏览器中打开")
-        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

@@ -22,15 +22,12 @@ import edu.neu.campus.contract.BalanceKind
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.ui.components.AnimatedNumber
 import edu.neu.campus.ui.components.CampusCard
-import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPageEnter
-import edu.neu.campus.ui.components.CampusPill
-import edu.neu.campus.ui.components.CampusRow
-import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
+import edu.neu.campus.ui.components.TimeFormatter
 import edu.neu.campus.ui.components.tapScale
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
@@ -45,7 +42,6 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.BankCards
 import top.yukonga.miuix.kmp.icon.extended.Hide
-import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.WorldClock
@@ -55,8 +51,7 @@ import top.yukonga.miuix.kmp.icon.extended.WorldClock
  *
  * 约定：
  * - 顶部大余额卡使用资产功能色柔化渐变，数字带滚动动画
- * - 遮罩切换与刷新位于标题栏与卡片内，不隐藏任何来源信息
- * - 数据说明明确只读边界（不代表卡状态、在线状态或套餐）
+ * - 遮罩切换与刷新位于标题栏与卡片内
  */
 @Composable
 fun BalanceDetailScreen(
@@ -71,7 +66,6 @@ fun BalanceDetailScreen(
     val isCard = kind == BalanceKind.CAMPUS_CARD
     val pageTitle = if (isCard) "校园卡" else "网费"
     val accountTitle = if (isCard) "校园卡主账户余额" else "校园网账户余额"
-    val sourceName = if (isCard) "一卡通中心" else "网络中心"
 
     val isRefreshing = balanceSnapshot.phase == QueryPhase.LOADING
     val isMasked = BalancePrivacyManager.isBalanceMasked
@@ -101,7 +95,6 @@ fun BalanceDetailScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = pageTitle,
-            subtitle = if (isCard) "校园卡余额与来源" else "校园网余额与来源",
             onBack = onBack,
             actions = {
                 IconButton(
@@ -135,7 +128,7 @@ fun BalanceDetailScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                     // 离线/缓存提示
                     if (balanceSnapshot.isStale) {
-                        SafeDataTag(text = "离线，显示上次获取的余额")
+                        SafeDataTag(text = "余额旧缓存 · 最近同步 ${TimeFormatter.formatDateTime(balanceSnapshot.lastSuccessEpochMillis)}")
                     }
 
                     // 1. 主余额卡
@@ -235,65 +228,13 @@ fun BalanceDetailScreen(
                                 }
                             }
 
-                            SafeDataTag(
-                                sourceName = sourceName,
-                                lastSuccessEpochMillis = balanceSnapshot.lastSuccessEpochMillis,
-                                isStale = balanceSnapshot.isStale
-                            )
-                        }
-                    }
-
-                    // 2. 数据说明
-                    CampusSection(title = "数据说明") {
-                        CampusGroup {
-                            CampusRow(
-                                title = "仅提供余额查询",
-                                subtitle = "不代表卡片状态、网络在线状态或套餐信息",
-                                leading = {
-                                    CampusIconBadge(
-                                        icon = MiuixIcons.Regular.Info,
-                                        tint = colors.brand,
-                                        container = colors.brandContainer,
-                                        size = 38.dp,
-                                        iconSize = 20.dp,
-                                        cornerRadius = CampusShapes.extraSmall
-                                    )
-                                }
-                            )
-                            if (serverMasked) {
-                                CampusRow(
-                                    title = "学校未提供明文余额",
-                                    leading = {
-                                        CampusIconBadge(
-                                            icon = MiuixIcons.Regular.Hide,
-                                            tint = colors.warning,
-                                            container = colors.warningContainer,
-                                            size = 38.dp,
-                                            iconSize = 20.dp,
-                                            cornerRadius = CampusShapes.extraSmall
-                                        )
-                                    }
-                                )
-                            }
                             balanceSnapshot.data?.sourceUpdatedAt?.let { updatedAt ->
-                                CampusRow(
-                                    title = "学校更新于 $updatedAt",
-                                    leading = {
-                                        CampusIconBadge(
-                                            icon = MiuixIcons.Regular.WorldClock,
-                                            tint = colors.textSecondary,
-                                            container = colors.surfaceMuted,
-                                            size = 38.dp,
-                                            iconSize = 20.dp,
-                                            cornerRadius = CampusShapes.extraSmall
-                                        )
-                                    }
-                                )
+                                Text(text = "学校更新于 $updatedAt", fontSize = 12.sp, color = colors.textSecondary)
                             }
                         }
                     }
 
-                    // 3. 加载/异常
+                    // 加载/异常
                     if (balanceSnapshot.phase == QueryPhase.FAILED) {
                         CampusCard {
                             LoadStatePanel(

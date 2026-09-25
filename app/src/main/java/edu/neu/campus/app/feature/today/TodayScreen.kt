@@ -466,7 +466,6 @@ fun TodayScreen(
         CourseDetailBottomSheet(
             course = c,
             otherOccurrences = others,
-            lastUpdatedTime = timetableSnapshot?.lastSuccessEpochMillis,
             onDismiss = { inspectingCourse = null }
         )
     }

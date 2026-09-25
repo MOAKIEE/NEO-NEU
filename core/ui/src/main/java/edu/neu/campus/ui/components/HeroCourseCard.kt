@@ -156,7 +156,7 @@ fun HeroCourseCard(
                 when (current) {
                     HeroState.Error -> HeroMessage(
                         title = "课程暂不可用",
-                        description = error?.message.orEmpty(),
+                        description = if (onRetry != null) error?.message.orEmpty() else "",
                         primaryText = "重试",
                         onPrimary = onRetry
                     )

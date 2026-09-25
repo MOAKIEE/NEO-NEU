@@ -113,7 +113,6 @@ fun SettingsScreen(
                 Spacer(Modifier.height(CampusSpacing.xxs))
                 CampusRow(
                     title = if (checkingConnection) "正在检查连接…" else "检查连接",
-                    subtitle = "检查统一门户与教务查询是否可用",
                     enabled = !checkingConnection && sessionState.accountScope != null,
                     showChevron = true,
                     onClick = {
@@ -160,7 +159,6 @@ fun SettingsScreen(
                     CampusGroupDivider(startIndent = SettingsTextIndent)
                     CampusRow(
                         title = "首页布局",
-                        subtitle = "快捷入口与展示模块",
                         leading = { SettingsIcon(MiuixIcons.Regular.GridView) },
                         showChevron = true,
                         onClick = { AppNavigator.navigateTo(AppDestination.HomeSettings) }
@@ -172,7 +170,6 @@ fun SettingsScreen(
                 CampusCard {
                     CampusRow(
                         title = "隐藏余额",
-                        subtitle = "遮罩校园卡与网费金额",
                         leading = { SettingsIcon(MiuixIcons.Regular.Hide) },
                         trailingContent = {
                             CampusSwitch(
@@ -184,18 +181,11 @@ fun SettingsScreen(
                     CampusGroupDivider(startIndent = SettingsTextIndent)
                     CampusRow(
                         title = "退出并清除本地数据",
-                        subtitle = "清除学校会话与当前账号缓存",
                         leading = { SettingsIcon(MiuixIcons.Regular.Lock) },
                         showChevron = true,
                         onClick = { showSignOutConfirm = true }
                     )
                 }
-                Text(
-                    text = "查询记录保存在本机，离线时仍可查看。",
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    color = colors.textSecondary
-                )
             }
 
             CampusCard {

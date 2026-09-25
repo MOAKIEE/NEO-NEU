@@ -74,7 +74,6 @@ fun ScheduleScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "作息与校历",
-            subtitle = "校区节次与校历",
             onBack = onBack
         )
         Column(
@@ -167,12 +166,9 @@ fun ScheduleScreen(
                         }
                     }
                 }
-                Text("仅显示学校返回的教学周，不推断选退课、考试或放假节点。", fontSize = 12.sp, color = colors.textSecondary)
-                SafeDataTag(
-                    sourceName = "教务校历",
-                    lastSuccessEpochMillis = weeks?.lastSuccessEpochMillis,
-                    isStale = weeks?.isStale ?: false
-                )
+                if (weeks?.isStale == true) {
+                    SafeDataTag(text = "校历旧缓存 · 最近同步 ${TimeFormatter.formatDateTime(weeks?.lastSuccessEpochMillis)}")
+                }
             } else {
                 val data = table?.data
                 if (data == null && error == null) {
@@ -228,11 +224,9 @@ fun ScheduleScreen(
                         }
                     }
                 }
-                SafeDataTag(
-                    sourceName = "教务节次",
-                    lastSuccessEpochMillis = table?.lastSuccessEpochMillis,
-                    isStale = table?.isStale ?: false
-                )
+                if (table?.isStale == true) {
+                    SafeDataTag(text = "作息时间旧缓存 · 最近同步 ${TimeFormatter.formatDateTime(table?.lastSuccessEpochMillis)}")
+                }
             }
         }
     }

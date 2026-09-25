@@ -104,7 +104,6 @@ fun QueryScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "查询",
-            subtitle = "校园信息与常用入口"
         )
 
         // 搜索栏
@@ -253,7 +252,6 @@ fun QueryScreen(
                             ) {
                                 HighlightEntryCard(
                                     title = "成绩查询",
-                                    description = "课程成绩与官方绩点",
                                     icon = MiuixIcons.Regular.Notes,
                                     accent = colors.gradeForeground,
                                     container = colors.gradeContainer,
@@ -263,7 +261,6 @@ fun QueryScreen(
 
                                 HighlightEntryCard(
                                     title = "考试安排",
-                                    description = "考试时间与考场地点",
                                     icon = MiuixIcons.Regular.Alarm,
                                     accent = colors.examForeground,
                                     container = colors.examContainer,
@@ -352,11 +349,6 @@ fun QueryScreen(
                                                 )
                                                 CampusPill(text = "官方网页")
                                             }
-                                            Text(
-                                                text = "在浏览器中查看学校官方办事大厅与服务指南",
-                                                fontSize = 12.sp,
-                                                color = colors.textSecondary
-                                            )
                                         }
                                     }
                                     Icon(
@@ -389,7 +381,6 @@ private data class ToolItem(
 @Composable
 private fun HighlightEntryCard(
     title: String,
-    description: String,
     icon: ImageVector,
     accent: Color,
     container: Color,
@@ -429,21 +420,12 @@ private fun HighlightEntryCard(
 
             Spacer(modifier = Modifier.height(CampusSpacing.md))
 
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    text = title,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary
-                )
-                Text(
-                    text = description,
-                    fontSize = 12.sp,
-                    color = colors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = title,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary
+            )
         }
     }
 }

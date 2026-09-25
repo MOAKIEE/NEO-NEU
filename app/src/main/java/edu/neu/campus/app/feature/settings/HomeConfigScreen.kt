@@ -69,7 +69,6 @@ fun HomeConfigScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "首页布局配置",
-            subtitle = "快捷入口与模块顺序",
             onBack = onBack
         )
 
@@ -95,7 +94,6 @@ fun HomeConfigScreen(
 
                             CampusRow(
                                 title = feat.title,
-                                subtitle = feat.description,
                                 leading = {
                                     CampusIconBadge(
                                         icon = featureIcon(feat.id),
@@ -157,7 +155,6 @@ fun HomeConfigScreen(
             StaggeredAppear(index = 1) {
                 CampusSection(
                     title = "首页摘要模块与排序",
-                    subtitle = "使用开关控制显隐，使用箭头调整上下顺序"
                 ) {
                     CampusGroup {
                         modules.forEachIndexed { index, mod ->

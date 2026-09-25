@@ -114,7 +114,6 @@ fun MessagesScreen(
             scrollBehavior = pageScrollBehavior,
             title = "消息中心",
             onBack = onBack,
-            subtitle = "门户消息与本机已读状态",
             actions = {
                 IconButton(
                     onClick = {
@@ -133,11 +132,6 @@ fun MessagesScreen(
                 }
             }
         )
-
-        // 规范要求的提示说明条
-        Row(modifier = Modifier.padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xxs)) {
-            SafeDataTag(text = "在此查看消息不会改变学校网站上的已读状态")
-        }
 
         // 筛选标签行
         Column(
@@ -183,7 +177,7 @@ fun MessagesScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CampusButton(text = "上一页", onClick = { page-- }, enabled = page > 1 && !isRefreshing)
-                Text("第 $page 页 · 门户", fontSize = 13.sp, color = colors.textSecondary)
+                Text("第 $page 页", fontSize = 13.sp, color = colors.textSecondary)
                 val total = messagesSnapshot.data?.total
                 val hasNext = if (total != null) page * 30 < total else allMessages.size == 30
                 CampusButton(text = "下一页", onClick = { page++ }, enabled = hasNext && !isRefreshing)

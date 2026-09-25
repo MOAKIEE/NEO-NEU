@@ -28,7 +28,6 @@ import edu.neu.campus.ui.components.CampusRow
 import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
-import edu.neu.campus.ui.components.SafeDataTag
 import edu.neu.campus.ui.components.StaggeredAppear
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
@@ -74,7 +73,6 @@ fun GradeDetailScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "成绩详情",
-            subtitle = "官方成绩与分项构成",
             onBack = onBack
         )
 
@@ -200,10 +198,7 @@ fun GradeDetailScreen(
                     val components = detailSnapshot?.data?.components.orEmpty()
                     if (components.isNotEmpty()) {
                         StaggeredAppear(index = 1) {
-                            CampusSection(
-                                title = "成绩组成项",
-                                subtitle = "学校官方公布分项构成"
-                            ) {
+                            CampusSection(title = "成绩组成项") {
                                 CampusGroup {
                                     components.forEachIndexed { index, comp ->
                                         if (index > 0) CampusGroupDivider()
@@ -266,14 +261,6 @@ fun GradeDetailScreen(
                             )
                         }
                     }
-
-                    // 4. 来源与更新时间
-                    SafeDataTag(
-                        sourceName = "教务系统",
-                        lastSuccessEpochMillis = detailSnapshot?.lastSuccessEpochMillis
-                            ?: gradesSnapshot.lastSuccessEpochMillis,
-                        modifier = Modifier.padding(top = CampusSpacing.xxs)
-                    )
 
                     Spacer(modifier = Modifier.height(CampusSpacing.md))
                 }

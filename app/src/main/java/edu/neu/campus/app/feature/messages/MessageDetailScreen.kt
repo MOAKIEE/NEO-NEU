@@ -68,7 +68,6 @@ fun MessageDetailScreen(
         CampusTopBar(
             scrollBehavior = pageScrollBehavior,
             title = "通知详情",
-            subtitle = "门户来源与本机已读状态",
             onBack = onBack
         )
 
@@ -181,7 +180,7 @@ fun MessageDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "如需查看附件、填写表单或在学校网站标记已读，请前往智慧东大官方门户。",
+                            text = "附件和表单请在官方门户查看。",
                             fontSize = 12.sp,
                             color = CampusTheme.colors.textSecondary,
                             lineHeight = 18.sp
