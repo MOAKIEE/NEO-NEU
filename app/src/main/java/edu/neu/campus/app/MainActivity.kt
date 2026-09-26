@@ -146,7 +146,8 @@ class MainActivity : ComponentActivity() {
                             is AppDestination.BalanceDetail -> {
                                 edu.neu.campus.app.feature.balance.BalanceDetailScreen(
                                     kind = dest.kind,
-                                    onBack = { AppNavigator.popBack() }
+                                    onBack = { AppNavigator.popBack() },
+                                    onLoginClick = { launchLogin() }
                                 )
                             }
                             is AppDestination.Messages -> {

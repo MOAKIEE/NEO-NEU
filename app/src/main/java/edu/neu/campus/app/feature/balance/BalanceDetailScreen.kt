@@ -17,21 +17,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
-import edu.neu.campus.app.navigation.AppDestination
-import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.feature.services.OfficialService
 import edu.neu.campus.contract.BalanceKind
 import edu.neu.campus.contract.QueryPhase
 import edu.neu.campus.ui.components.AnimatedNumber
 import edu.neu.campus.ui.components.CampusCard
-import edu.neu.campus.ui.components.CampusButton
+import edu.neu.campus.app.feature.services.OfficialServiceRow
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPageEnter
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.components.LoadStatePanel
 import edu.neu.campus.ui.components.SafeDataTag
 import edu.neu.campus.ui.components.TimeFormatter
-import edu.neu.campus.ui.components.tapScale
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
@@ -58,6 +55,7 @@ import top.yukonga.miuix.kmp.icon.extended.WorldClock
 fun BalanceDetailScreen(
     kind: BalanceKind,
     onBack: () -> Unit,
+    onLoginClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -83,7 +81,7 @@ fun BalanceDetailScreen(
         serverMasked -> "学校已遮罩"
         rawVal != null -> rawVal
         balanceSnapshot.phase == QueryPhase.LOADING -> "同步中…"
-        else -> "--.--"
+        else -> "暂无数据"
     }
 
     val pageScrollBehavior = MiuixScrollBehavior()
@@ -156,6 +154,7 @@ fun BalanceDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
                                 ) {
@@ -175,26 +174,11 @@ fun BalanceDetailScreen(
                                     )
                                 }
 
-                                Row(
-                                    modifier = Modifier
-                                        .tapScale(onClick = { BalancePrivacyManager.toggleMasked() },
-                                            pressedScale = 0.94f, clipShape = RoundedCornerShape(CampusShapes.pill))
-                                        .background(Color.White.copy(alpha = if (colors.isDark) 0.14f else 0.7f))
-                                        .padding(horizontal = CampusSpacing.xs, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
+                                IconButton(onClick = { BalancePrivacyManager.toggleMasked() }) {
                                     Icon(
                                         imageVector = if (isMasked) MiuixIcons.Regular.Show else MiuixIcons.Regular.Hide,
-                                        contentDescription = null,
-                                        tint = tintText,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Text(
-                                        text = if (isMasked) "显示余额" else "隐藏余额",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = tintText
+                                        contentDescription = if (isMasked) "显示余额" else "隐藏余额",
+                                        tint = tintText
                                     )
                                 }
                             }
@@ -204,7 +188,7 @@ fun BalanceDetailScreen(
                                 verticalAlignment = Alignment.Bottom,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text(
+                                if (amount != null) Text(
                                     text = "¥",
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
@@ -235,16 +219,12 @@ fun BalanceDetailScreen(
                         }
                     }
 
-                    CampusButton(
-                        text = if (isCard) "校园卡充值" else "网费充值",
-                        onClick = {
-                            AppNavigator.navigateTo(AppDestination.OfficialWeb(
-                                if (isCard) OfficialService.CARD_RECHARGE else OfficialService.NETWORK_RECHARGE
-                            ))
-                        },
-                        primary = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    CampusCard {
+                        OfficialServiceRow(
+                            service = if (isCard) OfficialService.CARD_RECHARGE else OfficialService.NETWORK_RECHARGE,
+                            showWebLabel = true
+                        )
+                    }
 
                     // 加载/异常
                     if (balanceSnapshot.phase == QueryPhase.FAILED) {
@@ -252,6 +232,7 @@ fun BalanceDetailScreen(
                             LoadStatePanel(
                                 isLoading = false,
                                 error = balanceSnapshot.error,
+                                onLogin = onLoginClick,
                                 onRetry = {
                                     coroutineScope.launch {
                                         CampusDataProvider.sync.requestVisible(edu.neu.campus.app.navigation.AppNavigator.currentTab,

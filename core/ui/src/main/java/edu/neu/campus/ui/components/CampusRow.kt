@@ -33,6 +33,7 @@ fun CampusRow(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    titleMaxLines: Int = 1,
     leading: (@Composable () -> Unit)? = null,
     trailingText: String? = null,
     trailingColor: Color = CampusTheme.colors.textSecondary,
@@ -65,7 +66,7 @@ fun CampusRow(
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (enabled) colors.textPrimary else colors.textDisabled,
-                maxLines = 1,
+                maxLines = titleMaxLines,
                 overflow = TextOverflow.Ellipsis
             )
             if (!subtitle.isNullOrBlank()) {

@@ -43,6 +43,9 @@ import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusPill
+import edu.neu.campus.ui.components.CampusRow
+import edu.neu.campus.ui.components.CampusGroupDivider
+import edu.neu.campus.app.feature.services.OfficialServiceRow
 import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusSearchField
 import edu.neu.campus.ui.components.CampusTopBar
@@ -59,7 +62,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Alarm
 import top.yukonga.miuix.kmp.icon.extended.BankCards
-import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Email
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Notes
@@ -76,8 +79,8 @@ import top.yukonga.miuix.kmp.icon.extended.Weeks
  * 组件约定：
  * - 顶部统一搜索，支持名称、别名与拼音
  * - 学习查询：成绩与考试两张重点入口卡片，图标置上、功能色柔化渐变
- * - 常用工具：一个分组承载图标面板（图标底 50dp + 13sp 标签）
- * - 学校服务：独立入口卡片；网页统一在应用内打开
+ * - 常用工具：校园工具宫格与消息、待办列表；大字体降为列表
+ * - 官方服务：共享服务行，网页统一在应用内打开
  * - 搜索结果与默认面板之间使用横向淡入切换，避免闪烁
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -204,8 +207,8 @@ fun QueryScreen(
                                             modifier = Modifier.weight(1f),
                                             verticalArrangement = Arrangement.spacedBy(3.dp)
                                         ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
+                                            FlowRow(
+                                                verticalArrangement = Arrangement.spacedBy(CampusSpacing.xxs),
                                                 horizontalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
                                             ) {
                                                 Text(
@@ -214,13 +217,13 @@ fun QueryScreen(
                                                     fontWeight = FontWeight.SemiBold,
                                                     color = colors.textPrimary
                                                 )
-                                                CampusPill(text = item.category.displayName)
+                                                CampusPill(text = if (item.isNative) item.category.displayName else "官方网页")
                                             }
                                             Text(
                                                 text = item.description,
                                                 fontSize = 12.sp,
                                                 color = colors.textSecondary,
-                                                maxLines = 1,
+                                                maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
@@ -269,6 +272,13 @@ fun QueryScreen(
                                     onClick = { AppNavigator.navigateTo(AppDestination.Exams) }
                                 )
                             }
+                            Spacer(Modifier.height(CampusSpacing.sm))
+                            CampusGroup {
+                                ToolGrid(listOf(
+                                    ToolItem(FeatureRegistry.ID_TIMETABLE, "课表", MiuixIcons.Regular.Weeks, colors.timetableForeground, colors.timetableContainer),
+                                    ToolItem(FeatureRegistry.ID_BELL_SCHEDULE, "校历作息", MiuixIcons.Regular.Months, colors.networkForeground, colors.networkContainer)
+                                ), minOf(2, toolColumns))
+                            }
                         }
                     }
 
@@ -276,93 +286,36 @@ fun QueryScreen(
                         CampusSection(title = "常用工具") {
                             CampusGroup {
                                 val tools = listOf(
-                                    ToolItem(FeatureRegistry.ID_TIMETABLE, "课表", MiuixIcons.Regular.Weeks, colors.timetableForeground, colors.timetableContainer),
-                                    ToolItem(FeatureRegistry.ID_BELL_SCHEDULE, "校历作息", MiuixIcons.Regular.Months, colors.networkForeground, colors.networkContainer),
                                     ToolItem(FeatureRegistry.ID_CAMPUS_CARD, "校园卡", MiuixIcons.Regular.BankCards, colors.cardForeground, colors.cardContainer),
                                     ToolItem(FeatureRegistry.ID_ECODE, "e 码通", MiuixIcons.Regular.Scan, colors.cardForeground, colors.cardContainer),
-                                    ToolItem(FeatureRegistry.ID_CARD_RECHARGE, "校园卡充值", MiuixIcons.Regular.BankCards, colors.cardForeground, colors.cardContainer),
-                                    ToolItem(FeatureRegistry.ID_NETWORK, "网费", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer),
-                                    ToolItem(FeatureRegistry.ID_NETWORK_RECHARGE, "网费充值", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer),
-                                    ToolItem(FeatureRegistry.ID_STUDENT_MAIL, "学生邮箱", MiuixIcons.Regular.Messages, colors.messageForeground, colors.messageContainer),
-                                    ToolItem(FeatureRegistry.ID_PAYMENT_HALL, "缴费大厅", MiuixIcons.Regular.Store, colors.brand, colors.brandContainer),
-                                    ToolItem(FeatureRegistry.ID_MESSAGES, "消息中心", MiuixIcons.Regular.Messages, colors.messageForeground, colors.messageContainer),
-                                    ToolItem(FeatureRegistry.ID_TASKS, "待办申请", MiuixIcons.Regular.Tasks, colors.messageForeground, colors.messageContainer)
+                                    ToolItem(FeatureRegistry.ID_NETWORK, "网费", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer)
                                 )
 
-                                val chunked = tools.chunked(toolColumns)
-                                chunked.forEachIndexed { rowIndex, rowItems ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = CampusSpacing.xs),
-                                        horizontalArrangement = Arrangement.SpaceAround
-                                    ) {
-                                        rowItems.forEach { tool ->
-                                            ToolPanelItem(
-                                                title = tool.title,
-                                                icon = tool.icon,
-                                                iconColor = tool.iconColor,
-                                                iconBg = tool.iconBg,
-                                                onClick = { navigateToFeature(tool.id) },
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                        }
-                                        if (rowItems.size < toolColumns) {
-                                            repeat(toolColumns - rowItems.size) {
-                                                Spacer(modifier = Modifier.weight(1f))
-                                            }
-                                        }
-                                    }
-                                    // 图标宫格行与行之间只留间距，不画单侧缩进的分隔线。
-                                    if (rowIndex < chunked.lastIndex) {
-                                        Spacer(modifier = Modifier.height(CampusSpacing.xs))
-                                    }
-                                }
+                                ToolGrid(tools, toolColumns)
+                                CampusGroupDivider()
+                                CampusRow(title = "消息中心", titleMaxLines = 2, showChevron = true,
+                                    leading = { CampusIconBadge(MiuixIcons.Regular.Messages, colors.messageForeground, colors.messageContainer) },
+                                    onClick = { navigateToFeature(FeatureRegistry.ID_MESSAGES) })
+                                CampusGroupDivider()
+                                CampusRow(title = "待办申请", titleMaxLines = 2, showChevron = true,
+                                    leading = { CampusIconBadge(MiuixIcons.Regular.Tasks, colors.messageForeground, colors.messageContainer) },
+                                    onClick = { navigateToFeature(FeatureRegistry.ID_TASKS) })
                             }
                         }
                     }
 
                     StaggeredAppear(index = 2) {
-                        CampusSection(title = "学校服务") {
-                            CampusCard(
-                                onClick = { AppNavigator.navigateTo(AppDestination.ServicesCatalog) }
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        modifier = Modifier.weight(1f),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
-                                    ) {
-                                        CampusIconBadge(
-                                            icon = MiuixIcons.Regular.Store,
-                                            tint = colors.brand,
-                                            container = colors.brandContainer
-                                        )
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Text(
-                                                    text = "学校服务目录",
-                                                    fontSize = 16.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = colors.textPrimary
-                                                )
-                                                CampusPill(text = "官方网页")
-                                            }
-                                        }
-                                    }
-                                    Icon(
-                                        imageVector = MiuixIcons.Basic.ArrowRight,
-                                        contentDescription = null,
-                                        tint = colors.textTertiary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                        CampusSection(
+                            title = "官方服务",
+                            actionText = "全部",
+                            onActionClick = { AppNavigator.navigateTo(AppDestination.ServicesCatalog) }
+                        ) {
+                            CampusGroup {
+                                val services = listOf(OfficialService.CARD_RECHARGE, OfficialService.NETWORK_RECHARGE,
+                                    OfficialService.STUDENT_MAIL, OfficialService.PAYMENT_HALL)
+                                services.forEachIndexed { index, service ->
+                                    OfficialServiceRow(service)
+                                    if (index < services.lastIndex) CampusGroupDivider()
                                 }
                             }
                         }
@@ -450,6 +403,14 @@ private fun ToolPanelItem(
 ) {
     val colors = CampusTheme.colors
 
+    if (LocalDensity.current.fontScale >= 1.5f) {
+        CampusRow(
+            title = title, titleMaxLines = 2, modifier = modifier, showChevron = true, onClick = onClick,
+            leading = { CampusIconBadge(icon, iconColor, iconBg) }
+        )
+        return
+    }
+
     Column(
         modifier = modifier
             .defaultMinSize(minHeight = 88.dp)
@@ -484,11 +445,11 @@ private fun getFeatureIcon(id: String): ImageVector {
         FeatureRegistry.ID_TIMETABLE -> MiuixIcons.Regular.Weeks
         FeatureRegistry.ID_BELL_SCHEDULE -> MiuixIcons.Regular.Months
         FeatureRegistry.ID_CAMPUS_CARD -> MiuixIcons.Regular.BankCards
-        FeatureRegistry.ID_ECODE -> MiuixIcons.Regular.GridView
+        FeatureRegistry.ID_ECODE -> MiuixIcons.Regular.Scan
         FeatureRegistry.ID_CARD_RECHARGE -> MiuixIcons.Regular.BankCards
         FeatureRegistry.ID_NETWORK -> MiuixIcons.Regular.Share
         FeatureRegistry.ID_NETWORK_RECHARGE -> MiuixIcons.Regular.Share
-        FeatureRegistry.ID_STUDENT_MAIL -> MiuixIcons.Regular.Messages
+        FeatureRegistry.ID_STUDENT_MAIL -> MiuixIcons.Regular.Email
         FeatureRegistry.ID_PAYMENT_HALL -> MiuixIcons.Regular.Store
         FeatureRegistry.ID_MESSAGES -> MiuixIcons.Regular.Messages
         FeatureRegistry.ID_TASKS -> MiuixIcons.Regular.Tasks
@@ -514,5 +475,23 @@ private fun navigateToFeature(featureId: String) {
         FeatureRegistry.ID_TASKS -> AppNavigator.navigateTo(AppDestination.Tasks)
         FeatureRegistry.ID_SERVICES_CATALOG -> AppNavigator.navigateTo(AppDestination.ServicesCatalog)
         else -> AppNavigator.navigateToTab(MainTab.TODAY)
+    }
+}
+
+@Composable
+private fun ToolGrid(tools: List<ToolItem>, toolColumns: Int) {
+    val rows = tools.chunked(toolColumns)
+    rows.forEachIndexed { index, items ->
+        Row(Modifier.fillMaxWidth().padding(vertical = CampusSpacing.xs)) {
+            items.forEach { tool ->
+                ToolPanelItem(
+                    title = tool.title, icon = tool.icon,
+                    iconColor = tool.iconColor, iconBg = tool.iconBg,
+                    onClick = { navigateToFeature(tool.id) }, modifier = Modifier.weight(1f)
+                )
+            }
+            repeat(toolColumns - items.size) { Spacer(Modifier.weight(1f)) }
+        }
+        if (index < rows.lastIndex) Spacer(Modifier.height(CampusSpacing.xs))
     }
 }
