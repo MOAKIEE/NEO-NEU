@@ -18,11 +18,12 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import edu.neu.campus.ui.components.CampusIconBadge
 import edu.neu.campus.ui.components.CampusRow
+import edu.neu.campus.ui.components.CampusSheetCloseAction
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -50,7 +51,6 @@ import edu.neu.campus.ui.components.CampusButton
 import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusSwitch
 import edu.neu.campus.ui.components.CampusTopBar
-import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import kotlinx.coroutines.delay
@@ -79,7 +79,11 @@ fun ECodeScreen(onBack: () -> Unit) {
                 })
             }
             CampusCard {
-                CampusRow(
+                if (LocalDensity.current.fontScale >= 1.5f) {
+                    Text("首页悬浮入口", color = colors.textPrimary, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(CampusSpacing.sm))
+                    CampusSwitch(checked = ECodePreferences.showFloatingBall, onCheckedChange = ECodePreferences::setFloatingBall)
+                } else CampusRow(
                     title = "首页悬浮入口",
                     subtitle = "拖动调整位置，闲置时自动收至侧边",
                     trailingContent = {
@@ -103,7 +107,7 @@ fun ECodeFloatingOverlay() {
                 Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("e 码通", modifier = Modifier.weight(1f), color = colors.textPrimary)
-                        CampusButton(text = "关闭", onClick = { open = false })
+                        CampusSheetCloseAction(onClick = { open = false })
                     }
                     ECodeCodePanel(onAuthenticate = {
                         open = false
@@ -180,16 +184,16 @@ private fun ECodeCodePanel(onAuthenticate: () -> Unit) {
                 Text("动态码自动更新", color = colors.textSecondary, fontSize = 12.sp)
             }
             ECodeResult.LoginRequired -> {
-                Text("认证后出示校园码", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("认证后出示校园码", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 Text("请在学校官方页面完成认证", color = colors.textSecondary, textAlign = TextAlign.Center)
                 CampusButton(text = "打开官方认证", onClick = onAuthenticate, primary = true)
             }
             ECodeResult.Unavailable -> {
-                Text("暂时无法获取二维码，请检查网络", color = colors.textSecondary)
+                Text("暂时无法获取二维码，请检查网络", color = colors.textSecondary, textAlign = TextAlign.Center)
                 CampusButton(text = "重试", onClick = { generation++ })
             }
             ECodeResult.InvalidResponse -> {
-                Text("学校二维码数据暂时无法识别", color = colors.textSecondary)
+                Text("学校二维码数据暂时无法识别", color = colors.textSecondary, textAlign = TextAlign.Center)
                 CampusButton(text = "重试", onClick = { generation++ })
             }
             null -> {
@@ -209,7 +213,7 @@ private fun ECodeQr(token: ECodeToken) {
         Image(
             bitmap = bitmap.asImageBitmap(),
             contentDescription = "e 码通动态二维码",
-            modifier = Modifier.widthIn(max = 240.dp).fillMaxWidth().aspectRatio(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(CampusShapes.small))
+            modifier = Modifier.widthIn(max = 240.dp).fillMaxWidth().aspectRatio(1f)
         )
     }
 }
@@ -217,7 +221,7 @@ private fun ECodeQr(token: ECodeToken) {
 private fun createQrBitmap(payload: String): Bitmap? = runCatching {
     val matrix = QRCodeWriter().encode(
         payload, BarcodeFormat.QR_CODE, 640, 640,
-        mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 2)
+        mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 4)
     )
     val pixels = IntArray(matrix.width * matrix.height) { index ->
         if (matrix[index % matrix.width, index / matrix.width]) android.graphics.Color.BLACK else android.graphics.Color.WHITE

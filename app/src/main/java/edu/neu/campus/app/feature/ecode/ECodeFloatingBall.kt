@@ -1,6 +1,7 @@
 package edu.neu.campus.app.feature.ecode
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -54,7 +55,10 @@ internal fun ECodeFloatingBall(onClick: () -> Unit, expanded: Boolean) {
         val travelY = with(density) { (maxHeight - height).toPx().coerceAtLeast(0f) }
         val minY = margin.coerceAtMost(travelY / 2)
         val maxY = (travelY - margin).coerceAtLeast(minY)
-        val dockX by animateFloatAsState(if (left) 0f else travelX, CampusMotion.springSmooth(), label = "dock")
+        val dockX by animateFloatAsState(
+            if (dragging) dragX else if (left) 0f else travelX,
+            if (dragging) snap() else CampusMotion.springSmooth(), label = "dock"
+        )
         val inset by animateFloatAsState(
             if (tucked) with(density) { diameter.toPx() / 2 } * (if (left) -1 else 1) else 0f,
             CampusMotion.springSmooth(), label = "tuck"
@@ -69,7 +73,7 @@ internal fun ECodeFloatingBall(onClick: () -> Unit, expanded: Boolean) {
         }
         // Keep the full touch target inside the viewport even while the visual is half hidden.
         Box(
-            Modifier.offset { IntOffset((if (dragging) dragX else dockX).roundToInt(), (if (dragging) dragY else y).roundToInt()) }
+            Modifier.absoluteOffset { IntOffset((if (dragging) dragX else dockX).roundToInt(), (if (dragging) dragY else y).roundToInt()) }
                 .size(diameter, height)
                 .pointerInput(travelX, travelY, left, fraction) {
                     detectDragGestures(
@@ -88,7 +92,7 @@ internal fun ECodeFloatingBall(onClick: () -> Unit, expanded: Boolean) {
         ) {
             FloatingActionButton(
                 onClick = { activity++; onClick() },
-                modifier = Modifier.offset { IntOffset(if (dragging) 0 else inset.roundToInt(), 0) }
+                modifier = Modifier.absoluteOffset { IntOffset(if (dragging) 0 else inset.roundToInt(), 0) }
                     .border(1.dp, colors.brandBorder, CampusShapes.largeShape),
                 shape = CampusShapes.largeShape,
                 containerColor = colors.surfaceElevated,
