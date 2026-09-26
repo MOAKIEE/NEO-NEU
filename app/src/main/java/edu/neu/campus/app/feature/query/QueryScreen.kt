@@ -63,6 +63,7 @@ import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Store
@@ -278,7 +279,7 @@ fun QueryScreen(
                                     ToolItem(FeatureRegistry.ID_TIMETABLE, "课表", MiuixIcons.Regular.Weeks, colors.timetableForeground, colors.timetableContainer),
                                     ToolItem(FeatureRegistry.ID_BELL_SCHEDULE, "校历作息", MiuixIcons.Regular.Months, colors.networkForeground, colors.networkContainer),
                                     ToolItem(FeatureRegistry.ID_CAMPUS_CARD, "校园卡", MiuixIcons.Regular.BankCards, colors.cardForeground, colors.cardContainer),
-                                    ToolItem(FeatureRegistry.ID_ECODE, "e 码通", MiuixIcons.Regular.GridView, colors.cardForeground, colors.cardContainer),
+                                    ToolItem(FeatureRegistry.ID_ECODE, "e 码通", MiuixIcons.Regular.Scan, colors.cardForeground, colors.cardContainer),
                                     ToolItem(FeatureRegistry.ID_CARD_RECHARGE, "校园卡充值", MiuixIcons.Regular.BankCards, colors.cardForeground, colors.cardContainer),
                                     ToolItem(FeatureRegistry.ID_NETWORK, "网费", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer),
                                     ToolItem(FeatureRegistry.ID_NETWORK_RECHARGE, "网费充值", MiuixIcons.Regular.Share, colors.networkForeground, colors.networkContainer),

@@ -21,6 +21,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.SecureFlagPolicy
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -82,20 +84,9 @@ fun ECodeScreen(onBack: () -> Unit) {
 fun ECodeFloatingOverlay() {
     val colors = CampusTheme.colors
     var open by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-        Box(
-            Modifier.padding(end = CampusSpacing.screenHorizontal, bottom = CampusSpacing.md)
-                .size(56.dp)
-                .tapScale(onClick = { open = true }, clipShape = CircleShape)
-                .background(colors.brand)
-                .semantics { contentDescription = "打开 e 码通二维码" },
-            contentAlignment = Alignment.Center
-        ) {
-            Text("码", color = colors.onBrand, fontSize = 22.sp)
-        }
-    }
+    ECodeFloatingBall(onClick = { open = true }, expanded = open)
     if (open) {
-        Dialog(onDismissRequest = { open = false }) {
+        Dialog(onDismissRequest = { open = false }, properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn)) {
             CampusCard {
                 Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
