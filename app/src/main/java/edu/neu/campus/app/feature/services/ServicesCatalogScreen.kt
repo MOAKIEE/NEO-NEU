@@ -10,6 +10,13 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.ui.components.CampusCard
+import edu.neu.campus.ui.components.CampusRow
+import edu.neu.campus.ui.components.CampusIconBadge
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.BankCards
+import top.yukonga.miuix.kmp.icon.extended.Messages
+import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Store
 import edu.neu.campus.ui.components.CampusTopBar
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
@@ -32,8 +39,21 @@ fun ServicesCatalogScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
         ) {
             items(OfficialService.entries.filter { it != OfficialService.ECODE }, key = { it.name }) { service ->
-                CampusCard(onClick = { AppNavigator.navigateTo(AppDestination.OfficialWeb(service)) }) {
-                    Text(service.title, color = colors.textPrimary)
+                CampusCard {
+                    CampusRow(
+                        title = service.title,
+                        leading = {
+                            val icon = when (service) {
+                                OfficialService.STUDENT_MAIL -> MiuixIcons.Regular.Messages
+                                OfficialService.ACADEMIC -> MiuixIcons.Regular.Notes
+                                OfficialService.CARD_RECHARGE, OfficialService.NETWORK_RECHARGE, OfficialService.PAYMENT_HALL -> MiuixIcons.Regular.BankCards
+                                else -> MiuixIcons.Regular.Store
+                            }
+                            CampusIconBadge(icon, colors.brand, colors.brandContainer)
+                        },
+                        showChevron = true,
+                        onClick = { AppNavigator.navigateTo(AppDestination.OfficialWeb(service)) }
+                    )
                 }
             }
         }

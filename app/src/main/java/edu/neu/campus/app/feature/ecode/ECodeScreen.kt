@@ -9,7 +9,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Scan
+import edu.neu.campus.ui.components.CampusIconBadge
+import edu.neu.campus.ui.components.CampusRow
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,8 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.SecureFlagPolicy
@@ -44,7 +50,6 @@ import edu.neu.campus.ui.components.CampusButton
 import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusSwitch
 import edu.neu.campus.ui.components.CampusTopBar
-import edu.neu.campus.ui.components.tapScale
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
@@ -54,26 +59,33 @@ import top.yukonga.miuix.kmp.basic.Text
 @Composable
 fun ECodeScreen(onBack: () -> Unit) {
     val colors = CampusTheme.colors
-    Column(Modifier.fillMaxSize().background(colors.background)) {
-        CampusTopBar(title = "e 码通", onBack = onBack)
+    val scroll = MiuixScrollBehavior()
+    Column(Modifier.fillMaxSize().background(colors.background).nestedScroll(scroll.nestedScrollConnection)) {
+        CampusTopBar(title = "e 码通", onBack = onBack, scrollBehavior = scroll)
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(horizontal = CampusSpacing.screenHorizontal, vertical = CampusSpacing.xs),
+                .padding(horizontal = CampusSpacing.screenHorizontal)
+                .padding(top = CampusSpacing.xs, bottom = CampusSpacing.screenBottom),
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
         ) {
-            CampusCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("首页悬浮球", modifier = Modifier.weight(1f), color = colors.textPrimary)
-                    CampusSwitch(
-                        checked = ECodePreferences.showFloatingBall,
-                        onCheckedChange = ECodePreferences::setFloatingBall
-                    )
+            CampusCard(contentPadding = PaddingValues(CampusSpacing.xl)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm)) {
+                    CampusIconBadge(MiuixIcons.Regular.Scan, colors.cardForeground, colors.cardContainer)
+                    Text("校园动态码", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 }
-            }
-            CampusCard {
+                Spacer(Modifier.height(CampusSpacing.xl))
                 ECodeCodePanel(onAuthenticate = {
                     AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.ECODE))
                 })
+            }
+            CampusCard {
+                CampusRow(
+                    title = "首页悬浮入口",
+                    subtitle = "拖动调整位置，闲置时自动收至侧边",
+                    trailingContent = {
+                        CampusSwitch(checked = ECodePreferences.showFloatingBall, onCheckedChange = ECodePreferences::setFloatingBall)
+                    }
+                )
             }
         }
     }
@@ -87,7 +99,7 @@ fun ECodeFloatingOverlay() {
     ECodeFloatingBall(onClick = { open = true }, expanded = open)
     if (open) {
         Dialog(onDismissRequest = { open = false }, properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn)) {
-            CampusCard {
+            CampusCard(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("e 码通", modifier = Modifier.weight(1f), color = colors.textPrimary)
@@ -158,17 +170,18 @@ private fun ECodeCodePanel(onAuthenticate: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 280.dp).padding(vertical = CampusSpacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
+        verticalArrangement = Arrangement.spacedBy(CampusSpacing.md, Alignment.CenterVertically)
     ) {
         when (val state = result) {
             is ECodeResult.Ready -> {
                 ECodeQr(state.token)
-                Text("动态码即将自动刷新", color = colors.textSecondary, fontSize = 12.sp)
+                Text("动态码自动更新", color = colors.textSecondary, fontSize = 12.sp)
             }
             ECodeResult.LoginRequired -> {
-                Text("e 码通尚未建立登录会话，请在学校页面认证一次", color = colors.textSecondary)
+                Text("认证后出示校园码", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("请在学校官方页面完成认证", color = colors.textSecondary, textAlign = TextAlign.Center)
                 CampusButton(text = "打开官方认证", onClick = onAuthenticate, primary = true)
             }
             ECodeResult.Unavailable -> {
@@ -179,7 +192,10 @@ private fun ECodeCodePanel(onAuthenticate: () -> Unit) {
                 Text("学校二维码数据暂时无法识别", color = colors.textSecondary)
                 CampusButton(text = "重试", onClick = { generation++ })
             }
-            null -> Text("正在获取二维码…", color = colors.textSecondary)
+            null -> {
+                CircularProgressIndicator()
+                Text("正在获取二维码…", color = colors.textSecondary)
+            }
         }
     }
 }
@@ -193,7 +209,7 @@ private fun ECodeQr(token: ECodeToken) {
         Image(
             bitmap = bitmap.asImageBitmap(),
             contentDescription = "e 码通动态二维码",
-            modifier = Modifier.size(240.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(CampusShapes.small))
+            modifier = Modifier.widthIn(max = 240.dp).fillMaxWidth().aspectRatio(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(CampusShapes.small))
         )
     }
 }
