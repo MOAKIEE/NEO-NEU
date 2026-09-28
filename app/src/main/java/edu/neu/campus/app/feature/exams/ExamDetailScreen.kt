@@ -17,7 +17,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.SyncReason
+import edu.neu.campus.app.navigation.AppDestination
+import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.Exam
+import edu.neu.campus.contract.QueryPhase
+import edu.neu.campus.ui.components.CampusCard
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusGroupDivider
 import edu.neu.campus.ui.components.CampusPageEnter
@@ -25,10 +30,14 @@ import edu.neu.campus.ui.components.CampusPill
 import edu.neu.campus.ui.components.CampusRow
 import edu.neu.campus.ui.components.CampusSection
 import edu.neu.campus.ui.components.CampusTopBar
+import edu.neu.campus.ui.components.LoadStatePanel
+import edu.neu.campus.ui.components.SafeDataTag
 import edu.neu.campus.ui.components.StaggeredAppear
+import edu.neu.campus.ui.components.TimeFormatter
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 
@@ -43,10 +52,19 @@ import top.yukonga.miuix.kmp.basic.Text
 fun ExamDetailScreen(
     termId: String,
     selectedExam: Exam,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onLoginClick: () -> Unit
 ) {
     val colors = CampusTheme.colors
     val academic = CampusDataProvider.academic
+    val scope = rememberCoroutineScope()
+    val retry: () -> Unit = {
+        scope.launch {
+            CampusDataProvider.sync.requestVisible(
+                AppNavigator.currentTab, AppDestination.ExamDetail(termId, selectedExam), SyncReason.MANUAL
+            )
+        }
+    }
 
     val examsSnapshot by academic.exams(termId).collectAsState()
     val exam = examsSnapshot.data?.firstOrNull { it == selectedExam }
@@ -65,22 +83,6 @@ fun ExamDetailScreen(
             onBack = onBack
         )
 
-        if (exam == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(CampusSpacing.xl),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "该考试记录已不可用，请返回所选学期重新查询。",
-                    fontSize = 14.sp,
-                    color = colors.textSecondary
-                )
-            }
-            return
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -89,6 +91,22 @@ fun ExamDetailScreen(
                 .padding(top = CampusSpacing.xs, bottom = CampusSpacing.screenBottom),
             verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)
         ) {
+            if (examsSnapshot.isStale) {
+                SafeDataTag(text = "考试安排旧缓存 · 最近同步 ${TimeFormatter.formatDateTime(examsSnapshot.lastSuccessEpochMillis)}")
+            }
+            if (examsSnapshot.error != null || exam == null) {
+                CampusCard {
+                    LoadStatePanel(
+                        isLoading = exam == null && examsSnapshot.phase in setOf(QueryPhase.IDLE, QueryPhase.LOADING),
+                        error = examsSnapshot.error,
+                        emptyMessage = if (exam == null) "该考试记录已不可用，请返回所选学期重新查询。" else null,
+                        onRetry = retry,
+                        onLogin = onLoginClick
+                    )
+                }
+            }
+            if (exam == null) return@Column
+
             CampusPageEnter {
                 Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
                     // 1. 顶部主卡

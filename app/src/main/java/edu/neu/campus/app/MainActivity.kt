@@ -139,7 +139,8 @@ class MainActivity : ComponentActivity() {
                                     ExamDetailScreen(
                                         termId = dest.termId,
                                         selectedExam = dest.exam,
-                                        onBack = { AppNavigator.popBack() }
+                                        onBack = { AppNavigator.popBack() },
+                                        onLoginClick = { launchLogin() }
                                     )
                                 }
                             }
