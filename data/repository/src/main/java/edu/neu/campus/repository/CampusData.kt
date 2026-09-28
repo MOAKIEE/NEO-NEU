@@ -50,8 +50,14 @@ class CampusData private constructor(context: Context) {
         override suspend fun verify() { SessionProbe.verify(localSession, http) }
         override suspend fun signOut() {
             val oldScope = state.value.accountScope
-            localSession.signOut()
-            if (oldScope != null) withContext(Dispatchers.IO) { cacheWriteLock.withLock { cache.clearScope(oldScope) } }
+            completeSignOut(
+                clearSession = { localSession.signOut() },
+                clearCache = {
+                    if (oldScope != null) withContext(Dispatchers.IO) {
+                        cacheWriteLock.withLock { cache.clearScope(oldScope) }
+                    }
+                }
+            )
         }
     }
     val academic: AcademicRepository = AcademicImpl()
