@@ -11,6 +11,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebChromeClient
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -37,6 +38,7 @@ import top.yukonga.miuix.kmp.icon.extended.Report
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import top.yukonga.miuix.kmp.basic.Text
+import kotlinx.coroutines.delay
 
 /** One in-app WebView profile, shared with the official login flow through Android CookieManager. */
 @Composable
@@ -49,14 +51,29 @@ fun OfficialWebScreen(service: OfficialService, onBack: () -> Unit) {
 
     var progress by remember(service) { mutableIntStateOf(0) }
     var loading by remember(service) { mutableStateOf(true) }
+    var pageVisible by remember(service) { mutableStateOf(false) }
+    var navigationId by remember(service) { mutableIntStateOf(0) }
     val navigateBack: () -> Unit = { if (web?.canGoBack() == true) web?.goBack() else onBack() }
-    val reload: () -> Unit = { error = null; progress = 0; loading = true; web?.reload() }
+    // Restart at the published entry: reload() can otherwise reload an empty/error document
+    // or repeat the last login form submission.
+    val reload: () -> Unit = {
+        web?.stopLoading()
+        error = null
+        progress = 0
+        loading = true
+        pageVisible = false
+        navigationId++
+        web?.loadUrl(service.url)
+    }
     BackHandler(onBack = navigateBack)
-    DisposableEffect(service) {
-        onDispose {
-            web?.stopLoading()
-            web?.destroy()
-            web = null
+    LaunchedEffect(service, navigationId, loading, error) {
+        if (loading && error == null) {
+            delay(30_000)
+            if (!pageVisible) {
+                error = "网页加载超时，请检查网络后重新加载"
+                loading = false
+                web?.stopLoading()
+            }
         }
     }
 
@@ -70,12 +87,21 @@ fun OfficialWebScreen(service: OfficialService, onBack: () -> Unit) {
                 Modifier.fillMaxWidth((progress / 100f).coerceIn(0.04f, 1f)).fillMaxHeight().background(colors.brand)
             )
         }
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().weight(1f)) {
             AndroidView(
                 factory = { activity ->
                     WebView(activity).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+                        )
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        // School desktop pages need a full viewport rather than a phone-width crop.
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.setSupportZoom(true)
+                        settings.builtInZoomControls = true
+                        settings.displayZoomControls = false
                         settings.setSupportMultipleWindows(false)
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -105,12 +131,18 @@ fun OfficialWebScreen(service: OfficialService, onBack: () -> Unit) {
                             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                                 error = null
                                 loading = true
+                                pageVisible = false
+                                navigationId++
                                 progress = 0
                                 currentHost = Uri.parse(url.orEmpty()).host.orEmpty()
                             }
 
                             override fun onPageFinished(view: WebView, url: String?) {
                                 loading = false
+                            }
+
+                            override fun onPageCommitVisible(view: WebView, url: String?) {
+                                pageVisible = true
                             }
 
                             override fun onReceivedError(view: WebView, request: WebResourceRequest, webError: WebResourceError) {
@@ -130,12 +162,30 @@ fun OfficialWebScreen(service: OfficialService, onBack: () -> Unit) {
                         loadUrl(service.url)
                     }
                 },
+                onRelease = { view ->
+                    // AndroidView has detached the view before destroying its rendering resources.
+                    view.stopLoading()
+                    view.webChromeClient = null
+                    view.webViewClient = WebViewClient()
+                    view.destroy()
+                    if (web === view) web = null
+                },
                 update = { view ->
                     // Do not expose the WebView's built-in error document underneath native recovery UI.
                     view.visibility = if (error == null) View.VISIBLE else View.INVISIBLE
                 },
                 modifier = Modifier.fillMaxSize()
             )
+            if (loading && !pageVisible && error == null) {
+                Column(
+                    Modifier.fillMaxSize().background(colors.background),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(CampusSpacing.md, Alignment.CenterVertically)
+                ) {
+                    Text("正在加载学校网页…", color = colors.textSecondary)
+                    CampusButton(text = "重新加载", onClick = reload)
+                }
+            }
             error?.let { message ->
                 Column(
                     Modifier.fillMaxSize().background(colors.background).verticalScroll(rememberScrollState())
