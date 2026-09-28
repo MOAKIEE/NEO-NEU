@@ -5,6 +5,7 @@ import edu.neu.campus.contract.Section
 import edu.neu.campus.contract.TeachingWeek
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
@@ -42,6 +43,26 @@ private fun parseSchoolDate(value: String?): Calendar? {
 fun isoDayOfWeek(calendar: Calendar): Int = (calendar.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
 
 fun schoolDateString(calendar: Calendar): String = dateFormat().format(calendar.time)
+
+fun schoolDateAt(epochMillis: Long): String = dateFormat().format(Date(epochMillis))
+
+/** A cached curWeek flag expires at the school's week boundary, even before a refresh finishes. */
+fun currentTeachingWeek(
+    weeks: List<TeachingWeek>,
+    today: String,
+    lastSuccessEpochMillis: Long?
+): TeachingWeek? {
+    val week = weeks.singleOrNull { it.isCurrent } ?: return null
+    val date = parseSchoolDate(today)?.timeInMillis ?: return null
+    val start = parseSchoolDate(week.startDate)?.timeInMillis
+    val end = parseSchoolDate(week.endDate)?.timeInMillis
+    if ((!week.startDate.isNullOrBlank() && start == null) ||
+        (!week.endDate.isNullOrBlank() && end == null)) return null
+    if ((start != null && date < start) || (end != null && date > end)) return null
+    if (start != null && end != null) return week
+    // Missing dates cannot establish a week boundary; only trust a flag checked today.
+    return week.takeIf { lastSuccessEpochMillis?.let(::schoolDateAt) == today }
+}
 
 private fun daysBetween(start: Calendar, end: Calendar): Long =
     Math.round((end.timeInMillis - start.timeInMillis) / 86_400_000.0)

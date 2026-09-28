@@ -4,6 +4,8 @@ import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.contract.BalanceKind
 import edu.neu.campus.contract.TaskKind
+import edu.neu.campus.ui.timetable.currentTeachingWeek
+import edu.neu.campus.ui.timetable.schoolDateAt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -50,7 +52,8 @@ class SyncCoordinator {
                 if (withTable && !withWeeks) launch { academic.refreshTimetable(term.id, null) }
             }
             if (withTable && withWeeks) {
-                val week = academic.weeks(term.id).value.data?.firstOrNull { it.isCurrent }
+                val weeks = academic.weeks(term.id).value
+                val week = currentTeachingWeek(weeks.data.orEmpty(), schoolDateAt(System.currentTimeMillis()), weeks.lastSuccessEpochMillis)
                 if (week != null) academic.refreshTimetable(term.id, week.number)
             }
         }

@@ -36,6 +36,8 @@ import edu.neu.campus.app.navigation.MainTab
 import edu.neu.campus.app.registry.FeatureRegistry
 import edu.neu.campus.contract.*
 import edu.neu.campus.ui.timetable.colorKey
+import edu.neu.campus.ui.timetable.currentTeachingWeek
+import edu.neu.campus.ui.timetable.schoolDateString
 import edu.neu.campus.ui.components.*
 import edu.neu.campus.ui.theme.CampusMotion
 import edu.neu.campus.ui.theme.CampusShapes
@@ -79,9 +81,18 @@ fun TodayScreen(
 
     // 教学周
     val weeksSnapshot = currentTerm?.let { academic.weeks(it.id).collectAsState().value }
-    val currentWeek = weeksSnapshot?.data?.firstOrNull { it.isCurrent }
-
     val schoolClock = rememberSchoolClock()
+    val schoolDate = schoolDateString(schoolClock)
+    val currentWeek = currentTeachingWeek(weeksSnapshot?.data.orEmpty(), schoolDate, weeksSnapshot?.lastSuccessEpochMillis)
+    var observedDate by remember { mutableStateOf(schoolDate) }
+    LaunchedEffect(schoolDate) {
+        if (observedDate != schoolDate) {
+            observedDate = schoolDate
+            CampusDataProvider.sync.requestVisible(
+                MainTab.TODAY, AppDestination.Main, edu.neu.campus.app.SyncReason.MANUAL
+            )
+        }
+    }
     val todayDayOfWeek = (schoolClock.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
     val todayDateStr = SimpleDateFormat("M 月 d 日 EEE", Locale.SIMPLIFIED_CHINESE).apply {
         timeZone = TimeZone.getTimeZone("Asia/Shanghai")
@@ -89,7 +100,7 @@ fun TodayScreen(
 
     // 课表快照
     val timetableSnapshot = if (currentTerm != null && currentWeek != null) {
-        academic.timetable(currentTerm.id, currentWeek?.number).collectAsState().value
+        academic.timetable(currentTerm.id, currentWeek.number).collectAsState().value
     } else null
 
     // 余额快照
