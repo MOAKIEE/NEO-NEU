@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.feature.services.OfficialService
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
@@ -324,7 +325,7 @@ private fun SchemaChangedCard(context: Context) {
                     Button(
                         onClick = {
                             try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://portal.neu.edu.cn"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(OfficialService.PORTAL.url))
                                 context.startActivity(intent)
                             } catch (e: Exception) {
                                 Toast.makeText(context, "无法启动系统浏览器", Toast.LENGTH_SHORT).show()
@@ -339,7 +340,7 @@ private fun SchemaChangedCard(context: Context) {
                     Button(
                         onClick = {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            cm.setPrimaryClip(ClipData.newPlainText("URL", "http://portal.neu.edu.cn"))
+                            cm.setPrimaryClip(ClipData.newPlainText("URL", OfficialService.PORTAL.url))
                             Toast.makeText(context, "网址已复制到剪贴板", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.weight(1f)
@@ -400,7 +401,7 @@ private fun TaskDetailDialog(
                     Button(
                         onClick = {
                             try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://portal.neu.edu.cn"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(OfficialService.PORTAL.url))
                                 context.startActivity(intent)
                             } catch (e: Exception) {
                                 Toast.makeText(context, "无法启动浏览器", Toast.LENGTH_SHORT).show()
