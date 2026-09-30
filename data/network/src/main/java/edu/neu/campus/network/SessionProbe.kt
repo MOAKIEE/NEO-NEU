@@ -41,8 +41,8 @@ object SessionProbe {
             }
         }
         if (session.state.value.accountScope == scope) {
-            session.markIfScope(scope, Domain.PORTAL, status)
             if (status == DomainStatus.READY) session.confirmSavedAccount(scope, account)
+            session.markIfScope(scope, Domain.PORTAL, status)
         }
         session.state.value
     }
@@ -77,11 +77,10 @@ object SessionProbe {
             portal.await() to academic.await()
         }
         if (session.state.value.accountScope != scope) return@withLock session.state.value
-        session.completeVerification(scope, portal, academic)
         // Reuse this probe's account field, including after a cancelled attempt or process restart.
         // Missing/mismatched fields cannot silently re-enable a saved password.
         if (portal == DomainStatus.READY) session.confirmSavedAccount(scope, portalAccount)
-        session.state.value
+        session.completeVerification(scope, portal, academic)
     }
 
     private suspend fun probe(block: suspend () -> DomainStatus): DomainStatus = try {

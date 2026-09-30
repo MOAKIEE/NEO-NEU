@@ -35,8 +35,8 @@
         pass.dispatchEvent(new Event('input', { bubbles: true }));
     }
     if (challenge) return 'challenge';
-    if (!allowSubmit) return 'form';
     if (user.disabled || pass.disabled || button.disabled || typeof window.login !== 'function') return 'unsupported';
+    if (!allowSubmit) return 'form';
     // Use the official handler so its current RSA/encryption and validation remain authoritative.
     window.__neoNeuLoginSubmitted = true;
     button.click();

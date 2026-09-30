@@ -37,10 +37,11 @@ sealed interface LoginResult {
 /** Entry points expose login state without exposing cookies or credentials to business pages. */
 object OfficialLogin {
     fun intent(context: Context, domain: Domain = Domain.PORTAL, continuation: String? = null,
-        credentialRejected: Boolean = false): Intent =
+        credentialRejected: Boolean = false, silentAttempted: Boolean = false): Intent =
         Intent(context, OfficialLoginActivity::class.java).putExtra("target_domain", domain.name)
             .putExtra("continuation", continuation)
             .putExtra("credential_rejected", credentialRejected)
+            .putExtra("silent_attempted", silentAttempted)
 
     fun savedLoginStatus(context: Context): StateFlow<SavedLoginStatus> = LocalSession.get(context).savedLoginStatus
     suspend fun verifyExisting(context: Context) = SessionProbe.verify(LocalSession.get(context))
@@ -72,14 +73,22 @@ internal object SchoolLogin {
 
     suspend fun saveAndConnect(activity: Activity, target: Domain, credentials: SchoolCredentials): LoginResult = lock.withLock {
         val session = LocalSession.get(activity)
+        var scope: String? = null
         try {
-            val scope = session.beginLogin(clearCookies = true)
-            if (!session.saveCredentials(scope, credentials)) return@withLock LoginResult.NeedCredentials()
-            attempt(activity, target, session, scope)
+            val savedScope = session.beginLogin(clearCookies = true, newCredentials = credentials)
+            scope = savedScope
+            attempt(activity, target, session, savedScope)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             LoginResult.Failed(LoginFailure.STORAGE.message)
+        } finally {
+            scope?.let { current ->
+                if (session.state.value.accountScope == current) {
+                    if (session.state.value.portal == DomainStatus.AUTHENTICATING) session.markIfScope(current, Domain.PORTAL, DomainStatus.UNVERIFIED)
+                    if (session.state.value.academic == DomainStatus.AUTHENTICATING) session.markIfScope(current, Domain.ACADEMIC, DomainStatus.UNVERIFIED)
+                }
+            }
         }
     }
 
@@ -100,6 +109,8 @@ internal object SchoolLogin {
                 root.addView(browser.web, FrameLayout.LayoutParams(1, 1))
                 var handedOff = false
                 var submitted = false
+                var lastPageState = "loading"
+                val unknownPage = UnknownLoginPageGate()
                 var academicHandoff = target == Domain.ACADEMIC
                 var portalHandoff = target == Domain.PORTAL
                 val watcher = launch {
@@ -110,10 +121,13 @@ internal object SchoolLogin {
                     browser.load(if (target == Domain.PORTAL) PORTAL_ENTRY else ACADEMIC_ENTRY)
                     val result = withTimeoutOrNull(30_000) {
                         var lastProbedUrl: String? = null
-                        var submissionAt = 0L
                         while (!browser.destroyed && session.state.value.accountScope == scope) {
                             browser.failure?.let { return@withTimeoutOrNull LoginResult.Failed(it.message) }
-                            if (browser.loading) { delay(200); continue }
+                            if (browser.loading) {
+                                lastPageState = "loading"
+                                unknownPage.ready("loading", browser.navigationRevision, SystemClock.elapsedRealtime())
+                                delay(200); continue
+                            }
                             val url = browser.web.url.orEmpty()
                             val host = Uri.parse(url).host
                             if ((host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn") && lastProbedUrl != url) {
@@ -140,6 +154,8 @@ internal object SchoolLogin {
                                 }
                             }
                             val state = browser.inspect(submitted = submitted)
+                            lastPageState = state
+                            val unknownReady = unknownPage.ready(state, browser.navigationRevision, SystemClock.elapsedRealtime())
                             when (state) {
                                 "form", "challenge" -> {
                                     val credentials = session.readCredentials(scope)
@@ -150,7 +166,6 @@ internal object SchoolLogin {
                                     if (filled == "submitted" || filled == "loading" && state == "form" && credentials != null) {
                                         // Navigation can begin synchronously inside the school's click handler.
                                         submitted = true
-                                        submissionAt = SystemClock.elapsedRealtime()
                                     }
                                     if (filled == "challenge") {
                                         session.pauseAutomaticLogin(scope)
@@ -158,8 +173,8 @@ internal object SchoolLogin {
                                         return@withTimeoutOrNull LoginResult.ContinueOnWeb(PendingLogin.put(browser))
                                     }
                                     if (filled == "unsupported" || filled == "null") {
-                                        handedOff = true
-                                        return@withTimeoutOrNull LoginResult.ContinueOnWeb(PendingLogin.put(browser))
+                                        delay(300)
+                                        continue
                                     }
                                     if (filled == "rejected") return@withTimeoutOrNull LoginResult.NeedCredentials(rejected = true)
                                 }
@@ -175,11 +190,7 @@ internal object SchoolLogin {
                                     if (target == Domain.ACADEMIC && session.state.value.academic == DomainStatus.READY && portalHandoff) {
                                         return@withTimeoutOrNull LoginResult.Connected
                                     }
-                                    session.pauseAutomaticLogin(scope)
-                                    handedOff = true
-                                    return@withTimeoutOrNull LoginResult.ContinueOnWeb(PendingLogin.put(browser))
-                                }
-                                "waiting" -> if (submitted && SystemClock.elapsedRealtime() - submissionAt > 4_000) {
+                                    if (!unknownReady) { delay(300); continue }
                                     session.pauseAutomaticLogin(scope)
                                     handedOff = true
                                     return@withTimeoutOrNull LoginResult.ContinueOnWeb(PendingLogin.put(browser))
@@ -191,6 +202,11 @@ internal object SchoolLogin {
                     }
                     result ?: if (session.state.value.accountScope == scope &&
                         (if (target == Domain.PORTAL) session.state.value.portal else session.state.value.academic) == DomainStatus.READY) LoginResult.Connected
+                    else if (!browser.destroyed && session.state.value.accountScope == scope &&
+                        submitted && lastPageState == "waiting" && !browser.loading && browser.failure == null) {
+                        handedOff = true
+                        LoginResult.ContinueOnWeb(PendingLogin.put(browser))
+                    }
                     else LoginResult.Failed(LoginFailure.TIMEOUT.message)
                 } catch (cancelled: CancellationException) {
                     throw cancelled

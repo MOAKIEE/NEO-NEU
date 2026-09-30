@@ -7,6 +7,10 @@ import edu.neu.campus.contract.DomainStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -85,6 +89,37 @@ class SavedCredentialsDeviceTest {
         session.confirmSavedAccount(scope, "different-account")
         assertEquals(SavedLoginStatus.NONE, session.savedLoginStatus.value)
         assertNull(session.readCredentials(scope, includePaused = true))
+        session.signOut()
+    }
+
+    @Test fun cancelledScopeMigrationKeepsEncryptedCredentialsBoundToNewScope() = runBlocking {
+        val session = withContext(Dispatchers.Main) { LocalSession(context) }
+        val oldScope = session.beginLogin(clearCookies = true)
+        session.saveCredentials(oldScope, SchoolCredentials("synthetic-account", "synthetic-secret"))
+        var transition: Job? = null
+        session.addScopeListener { if (it != oldScope) transition?.cancel() }
+        transition = launch(start = CoroutineStart.LAZY) { session.beginLogin(keepCredentials = true) }
+        transition.start()
+        transition.join()
+        val newScope = session.state.value.accountScope!!
+        assertNotEquals(oldScope, newScope)
+        assertEquals("synthetic-account", session.readCredentials(newScope, includePaused = true)?.account)
+        assertEquals(SavedLoginStatus.PAUSED, session.savedLoginStatus.value)
+        assertNull(session.readCredentials(oldScope, includePaused = true))
+        session.signOut()
+    }
+
+    @Test fun oldChallengeCannotRotateANewerAccountScope() = runBlocking {
+        val session = withContext(Dispatchers.Main) { LocalSession(context) }
+        val oldScope = session.beginLogin(clearCookies = true)
+        val newScope = session.beginLogin()
+        session.saveCredentials(newScope, SchoolCredentials("synthetic-new-account", "synthetic-secret"))
+        try {
+            session.beginLogin(keepCredentials = true, expectedScope = oldScope)
+            fail("An old challenge must be rejected")
+        } catch (_: CancellationException) { }
+        assertEquals(newScope, session.state.value.accountScope)
+        assertEquals("synthetic-new-account", session.readCredentials(newScope)?.account)
         session.signOut()
     }
 }

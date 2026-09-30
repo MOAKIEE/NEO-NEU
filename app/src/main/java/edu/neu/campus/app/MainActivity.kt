@@ -34,13 +34,19 @@ import edu.neu.campus.ui.theme.ThemeManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.job
+import kotlinx.coroutines.CoroutineStart
 import top.yukonga.miuix.kmp.basic.Text
 
 class MainActivity : ComponentActivity() {
     private val authCoordinator = AuthCoordinator()
     private var recoveryJob: Job? = null
+    private var recoveryRequested = false
+    internal var recoverSchool: suspend (Domain) -> LoginResult = { OfficialLogin.recover(this, it) }
+    private var pendingRecovery: Pair<String, String>? = null // account scope and in-memory browser token
     private val automaticLoginGate = AutomaticLoginGate()
     private var lastECodeWarmScope: String? = null
+    private var eCodeWarmJob: Job? = null
     private var connectingSchool by mutableStateOf(false)
     private var loginNotice by mutableStateOf<String?>(null)
     private var lastVerificationScope: String? = null
@@ -49,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private var officialPageLoginCancelled by mutableStateOf(false)
 
     private val loginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) automaticLoginGate.loginSucceeded()
         if (AppNavigator.currentDestination is AppDestination.OfficialWeb) {
             officialPageLoginCancelled = result.resultCode != RESULT_OK
             officialPageRevision++
@@ -243,15 +250,27 @@ class MainActivity : ComponentActivity() {
             destination is AppDestination.Exams || destination is AppDestination.ExamDetail ||
             destination is AppDestination.Schedule || destination is AppDestination.BellSchedule
         val domain = preferredLoginDomain(state, academicPage)
-        // Explicit login always opens native entry, even with an expired school session.
-        // Cancel a silent attempt so its late challenge cannot replace the user's choice.
-        recoveryJob?.cancel()
-        connectingSchool = false
+        if (authCoordinator.suppressResume()) return
+        eCodeWarmJob?.cancel()
         loginNotice = null
-        openVisibleLogin(domain)
+        val pending = pendingRecovery
+        pendingRecovery = null
+        if (pending != null && pending.first != state.accountScope) OfficialLogin.discardContinuation(pending.second)
+        val continuation = pending?.takeIf { it.first == state.accountScope }?.second
+        if (continuation != null) {
+            // This attempt already reached an interactive challenge; keep its browser and budget.
+            openVisibleLogin(domain, continuation)
+        } else recoverSession(domain, requested = true)
     }
 
     private fun maybeRecoverSession() {
+        pendingRecovery?.let { pending ->
+            if (pending.first != CampusDataProvider.session.state.value.accountScope) {
+                OfficialLogin.discardContinuation(pending.second)
+                pendingRecovery = null
+                loginNotice = null
+            }
+        }
         // Official pages own their portal-first recovery and the pending school callback.
         if (AppNavigator.currentDestination is AppDestination.OfficialWeb) return
         val state = CampusDataProvider.session.state.value
@@ -269,6 +288,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun maybeWarmECode() {
+        if (authCoordinator.suppressResume() || eCodeWarmJob?.isActive == true) return
         if (AppNavigator.currentDestination is AppDestination.OfficialWeb) return
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         val state = CampusDataProvider.session.state.value
@@ -276,10 +296,11 @@ class MainActivity : ComponentActivity() {
         if (state.portal != DomainStatus.READY || state.academic != DomainStatus.READY ||
             lastECodeWarmScope == scope) return
         lastECodeWarmScope = scope
-        lifecycleScope.launch {
+        eCodeWarmJob = lifecycleScope.launch {
             try {
                 ECodeSsoConnector.warm(this@MainActivity, OfficialECodeRepository(this@MainActivity))
             } catch (cancelled: CancellationException) {
+                lastECodeWarmScope = null
                 throw cancelled
             } catch (_: Exception) {
                 // The e-code page keeps its own visible authentication fallback.
@@ -287,42 +308,60 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun recoverSession(domain: Domain) {
-        if (authCoordinator.suppressResume() || recoveryJob?.isActive == true) return
-        val scope = CampusDataProvider.session.state.value.accountScope ?: return
-        recoveryJob = lifecycleScope.launch {
+    private fun recoverSession(domain: Domain, requested: Boolean = false) {
+        if (authCoordinator.suppressResume()) return
+        if (requested) recoveryRequested = true
+        if (recoveryJob?.isActive == true) return
+        val scope = CampusDataProvider.session.state.value.accountScope
+        recoveryJob = lifecycleScope.launch(start = CoroutineStart.LAZY) {
             connectingSchool = true
             loginNotice = null
             try {
-                val result = OfficialLogin.recover(this@MainActivity, domain)
-                if (CampusDataProvider.session.state.value.accountScope != scope) return@launch
+                val result = recoverSchool(domain)
+                if (CampusDataProvider.session.state.value.accountScope != scope) {
+                    if (result is LoginResult.ContinueOnWeb) OfficialLogin.discardContinuation(result.token)
+                    return@launch
+                }
                 when (result) {
                     LoginResult.Connected -> {
+                        if (recoveryRequested) automaticLoginGate.loginSucceeded()
                         CampusDataProvider.allowImmediateRetry()
                         CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.MANUAL)
                     }
                     is LoginResult.ContinueOnWeb -> {
-                        automaticLoginGate.pause(scope, domain)
-                        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) openVisibleLogin(domain, result.token)
-                        else OfficialLogin.discardContinuation(result.token)
+                        scope?.let { automaticLoginGate.pause(it, domain) }
+                        if (recoveryRequested && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            openVisibleLogin(domain, result.token)
+                        } else if (scope != null) {
+                            pendingRecovery?.let { OfficialLogin.discardContinuation(it.second) }
+                            pendingRecovery = scope to result.token
+                            loginNotice = "学校要求继续验证，请点击登录学校账号。"
+                        } else OfficialLogin.discardContinuation(result.token)
                     }
                     is LoginResult.NeedCredentials -> {
-                        automaticLoginGate.pause(scope, domain)
+                        scope?.let { automaticLoginGate.pause(it, domain) }
                         loginNotice = if (result.rejected) "账号密码未通过学校认证，自动登录已暂停。" else "请填写账号密码以启用自动登录。"
+                        if (recoveryRequested) openVisibleLogin(domain, credentialRejected = result.rejected)
                     }
                     is LoginResult.Failed -> {
                         loginNotice = result.message
+                        if (recoveryRequested) openVisibleLogin(domain)
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
                 loginNotice = "学校连接暂时无法恢复，请稍后重试。"
+                if (recoveryRequested && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) openVisibleLogin(domain)
             } finally {
-                connectingSchool = false
-                recoveryJob = null
+                if (recoveryJob === coroutineContext.job) {
+                    connectingSchool = false
+                    recoveryJob = null
+                    recoveryRequested = false
+                }
             }
         }
+        recoveryJob?.start()
     }
 
     private fun openVisibleLogin(domain: Domain, continuation: String? = null, credentialRejected: Boolean = false) {
@@ -330,7 +369,7 @@ class MainActivity : ComponentActivity() {
             continuation?.let { OfficialLogin.discardContinuation(it) }
             return
         }
-        loginLauncher.launch(OfficialLogin.intent(this, domain, continuation, credentialRejected))
+        loginLauncher.launch(OfficialLogin.intent(this, domain, continuation, credentialRejected, silentAttempted = true))
     }
 
     override fun onResume() {
@@ -352,8 +391,16 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        recoveryRequested = false
         recoveryJob?.cancel()
+        eCodeWarmJob?.cancel()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        pendingRecovery?.let { OfficialLogin.discardContinuation(it.second) }
+        pendingRecovery = null
+        super.onDestroy()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

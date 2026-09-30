@@ -184,7 +184,7 @@ fun OfficialWebScreen(service: OfficialService, onBack: () -> Unit, onLogin: (Lo
                             Text(message, color = colors.textSecondary, textAlign = TextAlign.Center)
                             CampusButton("重新连接", onClick = reload, primary = true)
                             if (service != OfficialService.PORTAL) CampusButton("直接连接学校服务", onClick = { viaPortal = false; reload() })
-                            CampusButton("登录学校账号", onClick = { requestLogin(LoginResult.NeedCredentials()) })
+                            CampusButton("登录学校账号", onClick = { viaPortal = true; reload() })
                         }
                     }
                 }

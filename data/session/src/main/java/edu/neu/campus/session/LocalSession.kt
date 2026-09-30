@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,10 +41,15 @@ class LocalSession(context: Context) {
     private var sessionGeneration = 0L
     @Synchronized fun addScopeListener(listener: (String?) -> Unit) { scopeListeners += listener }
 
-    suspend fun beginLogin(keepCredentials: Boolean = false, clearCookies: Boolean = false) = cookieWrites.withLock {
+    suspend fun beginLogin(keepCredentials: Boolean = false, clearCookies: Boolean = false,
+        expectedScope: String? = null, newCredentials: SchoolCredentials? = null): String = cookieWrites.withLock {
+        require(!keepCredentials || newCredentials == null)
+        if (expectedScope != null && state.value.accountScope != expectedScope) {
+            throw CancellationException("Account scope changed")
+        }
         val generation = synchronized(this) { sessionGeneration }
         val previousScope = state.value.accountScope
-        val credentials = if (keepCredentials && previousScope != null) {
+        val credentials = newCredentials ?: if (keepCredentials && previousScope != null) {
             withContext(Dispatchers.IO) { savedCredentials.read(previousScope, includePaused = true) }
         } else null
         val hadScope = state.value.accountScope != null
@@ -58,22 +64,26 @@ class LocalSession(context: Context) {
         }
         // Rotating the local scope isolates old cached data if the official page switches accounts.
         // Existing CAS and business cookies remain available for SSO during recovery.
-        val nextScope = synchronized(this) {
-            if (sessionGeneration != generation) throw CancellationException("Account scope changed")
-            sessionGeneration++
-            val scope = UUID.randomUUID().toString()
-            preferences.edit().putString("scope", scope).apply()
-            mutableState.value = SessionState(scope, DomainStatus.AUTHENTICATING, DomainStatus.AUTHENTICATING)
-            scopeListeners.forEach { it(scope) }
-            scope
-        }
-        withContext(Dispatchers.IO) {
+        // Once published, the new scope and its encrypted credentials must commit together,
+        // even if the owning screen rotates or goes into the background during the IO write.
+        withContext(NonCancellable) {
+            val nextScope = synchronized(this) {
+                if (sessionGeneration != generation) throw CancellationException("Account scope changed")
+                sessionGeneration++
+                val scope = UUID.randomUUID().toString()
+                preferences.edit().putString("scope", scope).apply()
+                mutableState.value = SessionState(scope, DomainStatus.AUTHENTICATING, DomainStatus.AUTHENTICATING)
+                scopeListeners.forEach { it(scope) }
+                scope
+            }
+            withContext(Dispatchers.IO) {
+                if (state.value.accountScope != nextScope) throw CancellationException("Account scope changed")
+                if (credentials != null) savedCredentials.save(nextScope, credentials, paused = newCredentials == null)
+                else savedCredentials.clear()
+            }
             if (state.value.accountScope != nextScope) throw CancellationException("Account scope changed")
-            if (credentials != null) savedCredentials.save(nextScope, credentials, paused = true)
-            else savedCredentials.clear()
+            nextScope
         }
-        if (state.value.accountScope != nextScope) throw CancellationException("Account scope changed")
-        nextScope
     }
 
     suspend fun saveCredentials(scope: String, credentials: SchoolCredentials): Boolean = cookieWrites.withLock {
@@ -84,7 +94,8 @@ class LocalSession(context: Context) {
 
     suspend fun readCredentials(scope: String, includePaused: Boolean = false): SchoolCredentials? = cookieWrites.withLock {
         if (state.value.accountScope != scope) return@withLock null
-        withContext(Dispatchers.IO) { savedCredentials.read(scope, includePaused) }
+        val credentials = withContext(Dispatchers.IO) { savedCredentials.read(scope, includePaused) }
+        credentials.takeIf { state.value.accountScope == scope }
     }
 
     suspend fun pauseAutomaticLogin(scope: String) = cookieWrites.withLock {

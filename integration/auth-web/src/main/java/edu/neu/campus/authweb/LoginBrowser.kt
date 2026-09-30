@@ -53,6 +53,7 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
     var siteIndex = 0
         private set
     private var revision = 0
+    val navigationRevision: Int get() = revision
     val web = WebView(context).apply {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -137,6 +138,7 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
     }
 
     fun load(url: String) {
+        revision++
         siteIndex = if (url == ACADEMIC_ENTRY) 1 else 0
         failure = null
         loading = true

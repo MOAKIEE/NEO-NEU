@@ -31,6 +31,17 @@ test('inspection does not read or submit account/password values', () => {
     assert.equal(f.run(null, null, false, false), 'form');
     assert.equal(f.clicks(), 0);
 });
+
+test('a late school handler is not mistaken for a ready password form', () => {
+    const f = fixture();
+    delete f.context.window.login;
+    assert.equal(f.run(null, null, false, false), 'unsupported');
+    assert.equal(f.clicks(), 0);
+    f.context.window.login = function () {};
+    assert.equal(f.run(null, null, false, false), 'form');
+    assert.equal(f.run('synthetic', 'test-secret', true, false), 'submitted');
+    assert.equal(f.clicks(), 1);
+});
 test('official handler is clicked once even if the page is polled again', () => {
     const f = fixture();
     assert.equal(f.run('synthetic', 'test-secret', true, false), 'submitted');

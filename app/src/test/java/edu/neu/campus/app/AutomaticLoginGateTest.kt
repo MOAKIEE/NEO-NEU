@@ -5,6 +5,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AutomaticLoginGateTest {
+    @Test fun successfulExplicitLoginAllowsLaterRecoveryInTheSameScope() {
+        val gate = AutomaticLoginGate()
+        assertTrue(gate.begin("scope", Domain.PORTAL, 0))
+        gate.pause("scope", Domain.PORTAL)
+        assertFalse(gate.begin("scope", Domain.PORTAL, 100_000))
+        gate.loginSucceeded()
+        assertTrue(gate.begin("scope", Domain.PORTAL, 100_001))
+        assertFalse(gate.begin("scope", Domain.PORTAL, 100_002))
+    }
     @Test fun repeatedEventsShareOneAttemptUntilCooldownExpires() {
         val gate = AutomaticLoginGate()
         assertTrue(gate.begin("scope", Domain.PORTAL, 0))

@@ -98,11 +98,16 @@ object OfficialPages {
                     if (continuation == null) browser.load(plan?.authenticationEntry ?: PORTAL_ENTRY)
                     var destinationOpened = false
                     var submitted = browser.automaticSubmitted
-                    var submissionAt = 0L
+                    var lastPageState = "loading"
+                    val unknownPage = UnknownLoginPageGate()
                     val result = withTimeoutOrNull(30_000) {
                         while (!browser.destroyed && session.state.value.accountScope == scope) {
                             browser.failure?.let { return@withTimeoutOrNull OfficialPageResult.Failed(it.message) }
-                            if (browser.loading) { delay(200); continue }
+                            if (browser.loading) {
+                                lastPageState = "loading"
+                                unknownPage.ready("loading", browser.navigationRevision, SystemClock.elapsedRealtime())
+                                delay(200); continue
+                            }
                             val url = browser.web.url.orEmpty()
                             val host = Uri.parse(url).host
                             if (host == "personal.neu.edu.cn" && plan == null) {
@@ -146,7 +151,10 @@ object OfficialPages {
                                 retained = true
                                 return@withTimeoutOrNull OfficialPageResult.Open(PreparedOfficialPage(browser, mailboxLogin))
                             }
-                            when (val state = browser.inspect(submitted = submitted)) {
+                            val state = browser.inspect(submitted = submitted)
+                            lastPageState = state
+                            val unknownReady = unknownPage.ready(state, browser.navigationRevision, SystemClock.elapsedRealtime())
+                            when (state) {
                                 "form", "challenge" -> {
                                     val credentials = session.readCredentials(scope)
                                     if (credentials == null && state == "form") return@withTimeoutOrNull OfficialPageResult.Login(LoginResult.NeedCredentials())
@@ -155,10 +163,9 @@ object OfficialPages {
                                     if (filled == "submitted" || filled == "loading") {
                                         submitted = true
                                         browser.automaticSubmitted = true
-                                        submissionAt = SystemClock.elapsedRealtime()
                                     } else if (filled == "rejected") {
                                         return@withTimeoutOrNull OfficialPageResult.Login(LoginResult.NeedCredentials(rejected = true))
-                                    } else if (filled in setOf("challenge", "unsupported", "null")) {
+                                    } else if (filled == "challenge") {
                                         retained = true
                                         return@withTimeoutOrNull OfficialPageResult.Login(LoginResult.ContinueOnWeb(PendingLogin.put(browser)))
                                     }
@@ -167,11 +174,8 @@ object OfficialPages {
                                     session.pauseAutomaticLogin(scope)
                                     return@withTimeoutOrNull OfficialPageResult.Login(LoginResult.NeedCredentials(rejected = true))
                                 }
-                                "waiting" -> if (submitted && SystemClock.elapsedRealtime() - submissionAt > 4_000) {
-                                    retained = true
-                                    return@withTimeoutOrNull OfficialPageResult.Login(LoginResult.ContinueOnWeb(PendingLogin.put(browser)))
-                                }
                                 "unsupported", "null" -> {
+                                    if (!unknownReady) { delay(300); continue }
                                     session.pauseAutomaticLogin(scope)
                                     retained = true
                                     return@withTimeoutOrNull OfficialPageResult.Login(LoginResult.ContinueOnWeb(PendingLogin.put(browser)))
@@ -181,7 +185,11 @@ object OfficialPages {
                         }
                         OfficialPageResult.Failed("账号状态已变化，请重新打开学校网页。")
                     }
-                    result ?: OfficialPageResult.Failed(LoginFailure.TIMEOUT.message)
+                    result ?: if (!browser.destroyed && session.state.value.accountScope == scope &&
+                        submitted && lastPageState == "waiting" && !browser.loading && browser.failure == null) {
+                        retained = true
+                        OfficialPageResult.Login(LoginResult.ContinueOnWeb(PendingLogin.put(browser)))
+                    } else OfficialPageResult.Failed(LoginFailure.TIMEOUT.message)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { OfficialPageResult.Failed(LoginFailure.NETWORK.message) }
                 finally { watcher.cancel(); if (!retained) browser.destroy() }

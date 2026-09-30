@@ -1,10 +1,12 @@
 package edu.neu.campus.authweb
 
 import android.widget.FrameLayout
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import edu.neu.campus.session.SchoolCredentials
+import edu.neu.campus.session.LocalSession
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -155,5 +157,39 @@ class LoginBrowserDeviceTest {
                 }
             } finally { withContext(Dispatchers.Main) { browser.destroy() } }
         }
+    }
+
+    @Test fun continuationOpensNativeEntryAndSurvivesRotationWithoutChangingScope() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val session = withContext(Dispatchers.Main) { LocalSession.get(context) }
+        val scope = session.beginLogin(clearCookies = true)
+        try {
+            scenario().use { source ->
+                lateinit var activity: OfficialLoginActivity
+                source.onActivity { activity = it }
+                val browser = load(activity, html.replace("</form>", "<input name='captcha'></form>"))
+                val token = withContext(Dispatchers.Main) {
+                    browser.scope = scope
+                    PendingLogin.put(browser)
+                }
+                ActivityScenario.launch<OfficialLoginActivity>(OfficialLogin.intent(context, continuation = token)).use { destination ->
+                    destination.onActivity {
+                        val model = ViewModelProvider(it)[LoginScreenModel::class.java]
+                        assertNull(model.browser)
+                        assertSame(browser, model.pendingBrowser)
+                        assertNull(browser.web.parent)
+                    }
+                    destination.recreate()
+                    destination.onActivity {
+                        val model = ViewModelProvider(it)[LoginScreenModel::class.java]
+                        assertNull(model.browser)
+                        assertSame(browser, model.pendingBrowser)
+                        assertFalse(browser.destroyed)
+                    }
+                    assertEquals(scope, session.state.value.accountScope)
+                }
+                assertTrue(browser.destroyed)
+            }
+        } finally { session.signOut() }
     }
 }

@@ -3,8 +3,38 @@ package edu.neu.campus.authweb
 import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.contract.SessionState
+import edu.neu.campus.session.SavedLoginStatus
+
+/** Decide once per entry, before status changes from our own attempt can retrigger login. */
+internal class SavedLoginEntryGate {
+    private var considered = false
+
+    fun claim(status: SavedLoginStatus, edited: Boolean, hasChallenge: Boolean, rejected: Boolean): Boolean {
+        if (considered) return false
+        considered = true
+        return status == SavedLoginStatus.ENABLED && !edited && !hasChallenge && !rejected
+    }
+}
 
 internal enum class LoginStep { WAIT, OPEN_ACADEMIC, FINISH }
+
+/** onPageFinished can precede a scripted SSO redirect or late DOM initialization. */
+internal class UnknownLoginPageGate {
+    private var navigation: Int? = null
+    private var since = 0L
+
+    fun ready(state: String, revision: Int, now: Long): Boolean {
+        if (state != "unsupported" && state != "null") {
+            navigation = null
+            return false
+        }
+        if (navigation != revision) {
+            navigation = revision
+            since = now
+        }
+        return now - since >= 1_500
+    }
+}
 
 internal fun nextLoginStep(
     target: Domain,

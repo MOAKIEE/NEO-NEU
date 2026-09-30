@@ -50,6 +50,11 @@ internal class AutomaticLoginGate {
     private var currentScope: String? = null
     private val attempts = mutableMapOf<Domain, Attempt>()
 
+    @Synchronized fun loginSucceeded() {
+        currentScope = null
+        attempts.clear()
+    }
+
     @Synchronized fun begin(scope: String, domain: Domain, now: Long): Boolean {
         if (currentScope != scope) { currentScope = scope; attempts.clear() }
         val previous = attempts[domain]

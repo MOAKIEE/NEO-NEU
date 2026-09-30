@@ -21,6 +21,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
 import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.contract.SessionState
@@ -42,17 +43,21 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 
-/** Rotation retains a challenge in memory; process death never restores password text. */
+/** Passwords live in memory only; a fresh entry reads the encrypted vault, never saved state. */
 internal class LoginScreenModel : ViewModel() {
     var account by mutableStateOf("")
+    var accountEdited = false
+    var passwordEdited = false
+    val entryGate = SavedLoginEntryGate()
     var password by mutableStateOf("")
     var busy by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var selectedSite by mutableIntStateOf(0)
     var attemptedAcademicHandoff = false
     var browser by mutableStateOf<LoginBrowser?>(null)
+    var pendingBrowser by mutableStateOf<LoginBrowser?>(null)
     var browserRevision by mutableIntStateOf(0)
-    override fun onCleared() { password = ""; browser?.destroy() }
+    override fun onCleared() { password = ""; browser?.destroy(); pendingBrowser?.destroy() }
 }
 
 /** Native credential entry; the official WebView is visible only for interactive authentication. */
@@ -62,6 +67,7 @@ class OfficialLoginActivity : ComponentActivity() {
     private var target = Domain.PORTAL
     private var loginJob: Job? = null
     private var checkJob: Job? = null
+    private var checkAgain = false
     private var scopeWatcher: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,37 +76,56 @@ class OfficialLoginActivity : ComponentActivity() {
         ThemeManager.init(this)
         session = LocalSession.get(this)
         model = ViewModelProvider(this)[LoginScreenModel::class.java]
+        if (savedInstanceState != null || intent.getBooleanExtra("silent_attempted", false)) {
+            model.entryGate.claim(SavedLoginStatus.NONE, false, false, false)
+        }
         target = runCatching { Domain.valueOf(intent.getStringExtra("target_domain").orEmpty()) }.getOrDefault(Domain.PORTAL)
         onBackPressedDispatcher.addCallback(this) { closeOrReturn() }
         model.browser?.let { attachVisible(it) }
         if (savedInstanceState == null && model.browser == null) {
             val continuation = intent.getStringExtra("continuation")
-            if (continuation != null) lifecycleScope.launch {
+            if (continuation != null) {
                 val browser = PendingLogin.take(continuation)
                 if (browser != null && browser.scope == session.state.value.accountScope) {
-                    try { showChallenge(browser) }
-                    catch (cancelled: CancellationException) { throw cancelled }
-                    catch (_: Exception) { model.error = LoginFailure.STORAGE.message }
+                    model.pendingBrowser = browser
                 }
                 else { browser?.destroy(); model.error = "验证页面已失效，请重新登录。" }
-            } else lifecycleScope.launch {
-                session.state.value.accountScope?.let { scope ->
-                    model.account = session.readCredentials(scope, includePaused = true)?.account.orEmpty()
-                }
-                if (intent.getBooleanExtra("credential_rejected", false)) model.error = "学校未接受账号密码，请检查后重新填写。"
             }
+            if (intent.getBooleanExtra("credential_rejected", false)) model.error = "学校未接受账号密码，请检查后重新填写。"
         }
         setContent {
             CampusTheme {
                 val state by session.state.collectAsState()
                 val saved by session.savedLoginStatus.collectAsState()
+                LaunchedEffect(state.accountScope, saved) {
+                    run {
+                        val scope = state.accountScope
+                        try {
+                            val credentials = scope?.let { session.readCredentials(it, includePaused = true) }
+                            if (session.state.value.accountScope != scope) return@LaunchedEffect
+                            if (!model.accountEdited) model.account = credentials?.account.orEmpty()
+                            if (!model.accountEdited && !model.passwordEdited) model.password = credentials?.password.orEmpty()
+                            lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
+                            if (session.state.value.accountScope != scope) return@LaunchedEffect
+                            if (model.entryGate.claim(
+                                    if (credentials == null) SavedLoginStatus.NONE else session.savedLoginStatus.value,
+                                    model.accountEdited || model.passwordEdited,
+                                    model.pendingBrowser != null || model.browser != null,
+                                    intent.getBooleanExtra("credential_rejected", false)
+                                )) resumeSaved()
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { model.error = "无法读取已保存账号，请重试或重新填写。" }
+                    }
+                }
                 Scaffold(containerColor = CampusTheme.colors.background) { padding ->
                     Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
                         val browser = model.browser
                         if (browser == null) CredentialScreen(model, saved, onBack = ::finish,
-                            onSubmit = ::saveAndLogin, onSaved = ::resumeSaved, onOfficial = ::openOfficial)
+                            onSubmit = ::saveAndLogin, onSaved = ::resumeSaved, onOfficial = ::openOfficial,
+                            onContinue = ::continueChallenge)
                         else ChallengeScreen(model, browser, state, target,
-                            onBack = ::closeOrReturn, onCheck = { checkConnection() }, onSite = ::openSite)
+                            onBack = ::closeOrReturn, onCheck = { checkConnection() }, onSite = ::openSite,
+                            onRefresh = ::refreshChallenge)
                     }
                 }
             }
@@ -112,14 +137,40 @@ class OfficialLoginActivity : ComponentActivity() {
         val account = model.account.trim()
         if (account.isBlank() || model.password.isEmpty()) { model.error = "请填写学号和密码。"; return }
         val credentials = SchoolCredentials(account, model.password)
+        model.passwordEdited = true
         model.password = ""
         runLogin { SchoolLogin.saveAndConnect(this, target, credentials) }
     }
 
-    private fun resumeSaved() = runLogin { SchoolLogin.recover(this, target) }
+    private fun resumeSaved() {
+        runLogin { SchoolLogin.recover(this, target) }
+    }
+
+    private fun discardPendingChallenge() {
+        model.pendingBrowser?.destroy()
+        model.pendingBrowser = null
+    }
+
+    private fun continueChallenge() {
+        if (model.busy) return
+        val browser = model.pendingBrowser ?: return
+        model.pendingBrowser = null
+        model.busy = true
+        loginJob = lifecycleScope.launch {
+            try {
+                if (browser.destroyed || browser.scope != session.state.value.accountScope) {
+                    browser.destroy()
+                    model.error = "验证页面已失效，请重新登录。"
+                } else showChallenge(browser)
+            } catch (cancelled: CancellationException) { browser.destroy(); throw cancelled }
+            catch (_: Exception) { browser.destroy(); model.error = LoginFailure.STORAGE.message }
+            finally { model.busy = false }
+        }
+    }
 
     private fun runLogin(block: suspend () -> LoginResult) {
         if (model.busy) return
+        discardPendingChallenge()
         model.busy = true
         model.error = null
         model.attemptedAcademicHandoff = false
@@ -144,6 +195,7 @@ class OfficialLoginActivity : ComponentActivity() {
 
     private fun openOfficial() {
         if (model.busy) return
+        discardPendingChallenge()
         model.password = ""
         model.error = null
         model.attemptedAcademicHandoff = false
@@ -163,7 +215,7 @@ class OfficialLoginActivity : ComponentActivity() {
 
     private suspend fun showChallenge(browser: LoginBrowser) {
         // Visible forms can switch accounts. Isolate personal caches before allowing interaction.
-        val scope = try { session.beginLogin(keepCredentials = true) }
+        val scope = try { session.beginLogin(keepCredentials = true, expectedScope = browser.scope) }
         catch (error: Exception) { browser.destroy(); throw error }
         browser.scope = scope
         model.selectedSite = browser.siteIndex
@@ -177,8 +229,9 @@ class OfficialLoginActivity : ComponentActivity() {
         browser.onChange = { model.selectedSite = browser.siteIndex; model.browserRevision++ }
         browser.onLoaded = {
             val host = android.net.Uri.parse(browser.web.url.orEmpty()).host
-            if (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn" ||
-                browser.pageTarget?.cataloguePage?.isDestination(browser.web.url.orEmpty()) == true) checkConnection(automatic = true)
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+                (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn" ||
+                browser.pageTarget?.cataloguePage?.isDestination(browser.web.url.orEmpty()) == true)) checkConnection(automatic = true)
         }
         scopeWatcher?.cancel()
         scopeWatcher = lifecycleScope.launch {
@@ -196,16 +249,21 @@ class OfficialLoginActivity : ComponentActivity() {
     }
 
     private fun checkConnection(automatic: Boolean = false) {
-        if (checkJob?.isActive == true) return
+        if (checkJob?.isActive == true) {
+            if (automatic) checkAgain = true
+            return
+        }
         val browser = model.browser ?: return
+        val navigation = browser.navigationRevision
+        model.busy = true
         checkJob = lifecycleScope.launch {
-            if (automatic) delay(700)
-            if (browser.destroyed || session.state.value.accountScope != browser.scope) return@launch
-            model.busy = true
             try {
+                if (automatic) delay(700)
+                if (browser.destroyed || model.browser !== browser || session.state.value.accountScope != browser.scope) return@launch
                 session.flushCookies()
                 val verified = if (browser.pageTarget != null) SessionProbe.verifyPortal(session) else SessionProbe.verify(session)
-                if (verified.accountScope != browser.scope || browser.destroyed) return@launch
+                if (verified.accountScope != browser.scope || browser.destroyed || model.browser !== browser ||
+                    browser.navigationRevision != navigation || browser.loading) return@launch
                 if (browser.pageTarget != null) {
                     // Portal/page handoff returns to the original service; it does not detour through academic login.
                     val host = android.net.Uri.parse(browser.web.url.orEmpty()).host
@@ -229,7 +287,23 @@ class OfficialLoginActivity : ComponentActivity() {
                     LoginStep.FINISH -> finishConnected()
                     LoginStep.WAIT -> model.error = if (!automatic) "连接尚未完成，请继续学校验证或检查网络。" else null
                 }
-            } finally { model.busy = false }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { model.error = "连接检查未完成，请重试。" }
+            finally {
+                model.busy = false
+                checkJob = null
+                val repeat = checkAgain
+                checkAgain = false
+                if (repeat && model.browser === browser && !browser.destroyed &&
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) checkConnection(automatic = true)
+            }
+        }
+    }
+
+    private fun refreshChallenge() {
+        if (model.busy) return
+        model.browser?.let { browser ->
+            browser.load(browser.pageTarget?.authenticationEntry ?: if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY)
         }
     }
 
@@ -241,6 +315,7 @@ class OfficialLoginActivity : ComponentActivity() {
 
     private fun closeOrReturn() {
         if (model.browser != null) {
+            checkAgain = false
             checkJob?.cancel(); scopeWatcher?.cancel()
             model.browser?.destroy(); model.browser = null
             model.busy = false
@@ -250,21 +325,29 @@ class OfficialLoginActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        checkAgain = false
         loginJob?.cancel()
+        checkJob?.cancel()
         super.onStop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Loading may have finished while stopped or while the WebView was parked for rotation.
+        model.browser?.onLoaded?.invoke()
     }
 
     override fun onDestroy() {
         scopeWatcher?.cancel(); checkJob?.cancel()
         if (isChangingConfigurations) model.browser?.park()
-        else { model.browser?.destroy(); model.browser = null; model.password = "" }
+        else { model.browser?.destroy(); model.browser = null; discardPendingChallenge(); model.password = "" }
         super.onDestroy()
     }
 }
 
 @Composable
 private fun CredentialScreen(model: LoginScreenModel, saved: SavedLoginStatus, onBack: () -> Unit,
-    onSubmit: () -> Unit, onSaved: () -> Unit, onOfficial: () -> Unit) {
+    onSubmit: () -> Unit, onSaved: () -> Unit, onOfficial: () -> Unit, onContinue: () -> Unit) {
     val colors = CampusTheme.colors
     val scroll = MiuixScrollBehavior()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -277,8 +360,8 @@ private fun CredentialScreen(model: LoginScreenModel, saved: SavedLoginStatus, o
             CampusPageEnter {
                 CampusCard {
                     Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
-                        CampusCredentialField(model.account, { if (it.length <= 256) model.account = it }, "学号", enabled = !model.busy)
-                        CampusCredentialField(model.password, { if (it.length <= 4096) model.password = it }, "学校统一认证密码", password = true, enabled = !model.busy)
+                        CampusCredentialField(model.account, { if (it.length <= 256) { model.account = it; model.accountEdited = true } }, "学号", enabled = !model.busy)
+                        CampusCredentialField(model.password, { if (it.length <= 4096) { model.password = it; model.passwordEdited = true } }, "学校统一认证密码", password = true, enabled = !model.busy)
                         Text("账号密码加密保存在本机，登录时仅发送到学校认证页面。", fontSize = 12.sp, color = colors.textSecondary)
                         CampusButton(if (model.busy) "正在连接学校…" else "保存并登录", { focus.clearFocus(); keyboard?.hide(); onSubmit() },
                             modifier = Modifier.fillMaxWidth(), primary = true, enabled = !model.busy)
@@ -292,7 +375,9 @@ private fun CredentialScreen(model: LoginScreenModel, saved: SavedLoginStatus, o
             model.error?.let { Text(it, fontSize = 13.sp, color = colors.error) }
             if (saved == SavedLoginStatus.ENABLED) CampusButton("使用已保存账号继续", onSaved,
                 modifier = Modifier.fillMaxWidth(), enabled = !model.busy)
-            if (saved == SavedLoginStatus.PAUSED && !model.busy && model.error == null) Text("自动登录已暂停，请重新填写密码或完成学校验证。", fontSize = 13.sp, color = colors.warning)
+            if (model.pendingBrowser != null) CampusButton("继续学校验证", onContinue,
+                modifier = Modifier.fillMaxWidth(), enabled = !model.busy)
+            if (saved == SavedLoginStatus.PAUSED && !model.busy && model.error == null) Text("自动登录已暂停，可重试登录或继续学校验证。", fontSize = 13.sp, color = colors.warning)
             CampusButton("使用学校网页登录", onOfficial, modifier = Modifier.fillMaxWidth(), enabled = !model.busy)
         }
     }
@@ -300,13 +385,13 @@ private fun CredentialScreen(model: LoginScreenModel, saved: SavedLoginStatus, o
 
 @Composable
 private fun ChallengeScreen(model: LoginScreenModel, browser: LoginBrowser, state: SessionState, target: Domain,
-    onBack: () -> Unit, onCheck: () -> Unit, onSite: (Int) -> Unit) {
+    onBack: () -> Unit, onCheck: () -> Unit, onSite: (Int) -> Unit, onRefresh: () -> Unit) {
     model.browserRevision // Observe browser callbacks without retaining webpage contents in Compose state.
     val colors = CampusTheme.colors
     Column(Modifier.fillMaxSize()) {
         CampusWebTopBar(title = browser.pageTarget?.title ?: "学校验证", host = android.net.Uri.parse(browser.web.url.orEmpty()).host.orEmpty(),
             refreshing = browser.loading, onBack = onBack,
-            onRefresh = { browser.load(browser.pageTarget?.authenticationEntry ?: if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY) }, onClose = onBack)
+            onRefresh = onRefresh, onClose = onBack)
         BoxWithConstraints(Modifier.weight(1f)) {
             val compact = maxHeight < 400.dp
             val keyboardSpace = maxHeight < 250.dp
@@ -320,7 +405,7 @@ private fun ChallengeScreen(model: LoginScreenModel, browser: LoginBrowser, stat
                         Column(Modifier.fillMaxSize().background(colors.background).verticalScroll(rememberScrollState()).padding(CampusSpacing.md),
                             verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(failure.message, color = colors.error)
-                            CampusButton("重试打开网页", { browser.load(browser.pageTarget?.authenticationEntry ?: if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY) })
+                            CampusButton("重试打开网页", onRefresh, enabled = !model.busy)
                         }
                     }
                     if (browser.loading) Text("正在打开学校网页…", modifier = Modifier.align(Alignment.TopCenter)
