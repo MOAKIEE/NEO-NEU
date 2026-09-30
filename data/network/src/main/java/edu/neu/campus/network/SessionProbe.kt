@@ -1,6 +1,7 @@
 package edu.neu.campus.network
 
 import edu.neu.campus.contract.DomainStatus
+import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.QueryErrorKind
 import edu.neu.campus.contract.SessionState
 import edu.neu.campus.session.LocalSession
@@ -22,6 +23,28 @@ object SessionProbe {
             sharedHttp = SchoolHttp(session)
         }
         return sharedHttp!!
+    }
+
+    /** Service routing needs the personal portal, without waiting for an unrelated academic probe. */
+    suspend fun verifyPortal(session: LocalSession, http: SchoolHttp = clientFor(session)): SessionState = verifyLock.withLock {
+        val scope = session.state.value.accountScope ?: return@withLock session.state.value
+        var account: String? = null
+        val status = probe {
+            val root = JSONObject(http.execute(SchoolCall.PORTAL_INFO))
+            when (root.optInt("e", -1)) {
+                0 -> {
+                    account = root.optJSONObject("d")?.optJSONObject("info")?.optString("xgh")?.takeIf { it.isNotBlank() }
+                    if (root.optJSONObject("d") != null) DomainStatus.READY else DomainStatus.UNREACHABLE
+                }
+                10013 -> DomainStatus.EXPIRED
+                else -> DomainStatus.UNREACHABLE
+            }
+        }
+        if (session.state.value.accountScope == scope) {
+            session.markIfScope(scope, Domain.PORTAL, status)
+            if (status == DomainStatus.READY) session.confirmSavedAccount(scope, account)
+        }
+        session.state.value
     }
 
     suspend fun verify(session: LocalSession, http: SchoolHttp = clientFor(session)): SessionState = verifyLock.withLock {

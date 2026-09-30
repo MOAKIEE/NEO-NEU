@@ -46,8 +46,14 @@ class MainActivity : ComponentActivity() {
     private var loginNotice by mutableStateOf<String?>(null)
     private var lastVerificationScope: String? = null
     private var lastVerificationAt = 0L
+    private var officialPageRevision by mutableIntStateOf(0)
+    private var officialPageLoginCancelled by mutableStateOf(false)
 
     private val loginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (AppNavigator.currentDestination is AppDestination.OfficialWeb) {
+            officialPageLoginCancelled = result.resultCode != RESULT_OK
+            officialPageRevision++
+        }
         lastVerificationScope = CampusDataProvider.session.state.value.accountScope
         lastVerificationAt = android.os.SystemClock.elapsedRealtime()
         if (authCoordinator.complete(result.resultCode == RESULT_OK)) {
@@ -78,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 val session by CampusDataProvider.session.state.collectAsState()
                 val tab = AppNavigator.currentTab
                 val destination = AppNavigator.currentDestination
+                LaunchedEffect(destination) { officialPageLoginCancelled = false }
                 LaunchedEffect(session.accountScope, session.portal, session.academic) {
                     maybeRecoverSession()
                     maybeWarmECode()
@@ -195,7 +202,15 @@ class MainActivity : ComponentActivity() {
                                 ECodeScreen(onBack = { AppNavigator.popBack() })
                             }
                             is AppDestination.OfficialWeb -> {
-                                OfficialWebScreen(service = dest.service, onBack = { AppNavigator.popBack() })
+                                OfficialWebScreen(service = dest.service, onBack = { AppNavigator.popBack() },
+                                    loginRevision = officialPageRevision, loginCancelled = officialPageLoginCancelled,
+                                    onLogin = { result ->
+                                        when (result) {
+                                            is LoginResult.ContinueOnWeb -> openVisibleLogin(Domain.PORTAL, result.token)
+                                            is LoginResult.NeedCredentials -> openVisibleLogin(Domain.PORTAL, credentialRejected = result.rejected)
+                                            else -> openVisibleLogin(Domain.PORTAL)
+                                        }
+                                    })
                             }
                             is AppDestination.HomeSettings -> {
                                 edu.neu.campus.app.feature.settings.HomeConfigScreen(
@@ -238,6 +253,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun maybeRecoverSession() {
+        // Official pages own their portal-first recovery and the pending school callback.
+        if (AppNavigator.currentDestination is AppDestination.OfficialWeb) return
         val state = CampusDataProvider.session.state.value
         val scope = state.accountScope ?: return
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || authCoordinator.suppressResume() ||
@@ -253,6 +270,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun maybeWarmECode() {
+        if (AppNavigator.currentDestination is AppDestination.OfficialWeb) return
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         val state = CampusDataProvider.session.state.value
         val scope = state.accountScope ?: return
@@ -316,12 +334,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun openVisibleLogin(domain: Domain, continuation: String? = null) {
+    private fun openVisibleLogin(domain: Domain, continuation: String? = null, credentialRejected: Boolean = false) {
         if (!authCoordinator.begin(domain)) {
             continuation?.let { OfficialLogin.discardContinuation(it) }
             return
         }
-        loginLauncher.launch(OfficialLogin.intent(this, domain, continuation))
+        loginLauncher.launch(OfficialLogin.intent(this, domain, continuation, credentialRejected))
     }
 
     override fun onResume() {

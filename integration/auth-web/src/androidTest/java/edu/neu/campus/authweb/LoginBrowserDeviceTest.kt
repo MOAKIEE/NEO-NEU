@@ -103,4 +103,57 @@ class LoginBrowserDeviceTest {
             } finally { withContext(Dispatchers.Main) { browser.destroy() } }
         }
     }
+
+    @Test fun mailboxFormNeverReceivesSchoolCredentialsAndServiceIdentitySurvivesHandoff() = runBlocking {
+        scenario().use { scenario ->
+            lateinit var activity: OfficialLoginActivity
+            scenario.onActivity { activity = it }
+            val browser = load(activity, html.replace("</form>", "<input id='uid'><input id='fakePassword' type='password'></form>"),
+                base = "https://mails.neu.edu.cn/coremail/index.jsp")
+            try {
+                withContext(Dispatchers.Main) { browser.pageTarget = OfficialPage.STUDENT_MAIL }
+                assertTrue(withContext(Dispatchers.Main) { browser.hasMailboxLoginForm() })
+                assertEquals("unsupported", withContext(Dispatchers.Main) {
+                    browser.inspect(SchoolCredentials("synthetic-school-account", "test-secret"), submit = true)
+                })
+                assertEquals("true", evaluate(browser, "document.getElementById('pd').value === '' && document.getElementById('un').value === ''"))
+                withContext(Dispatchers.Main) {
+                    val prepared = PreparedOfficialPage(browser)
+                    val token = PendingLogin.put(browser)
+                    val resumed = PendingLogin.take(token)!!
+                    assertSame(prepared.web, resumed.web)
+                    assertEquals(OfficialPage.STUDENT_MAIL, resumed.pageTarget)
+                    assertFalse(resumed.web.isSaveEnabled)
+                }
+            } finally { withContext(Dispatchers.Main) { browser.destroy() } }
+        }
+    }
+
+    @Test fun serviceRedirectHandoffKeepsBrowserAndSubmissionBudgetAfterComposeRelease() = runBlocking {
+        scenario().use { scenario ->
+            lateinit var activity: OfficialLoginActivity
+            scenario.onActivity { activity = it }
+            val browser = load(activity)
+            try {
+                val token = CompletableDeferred<String>()
+                withContext(Dispatchers.Main) {
+                    browser.pageTarget = OfficialPage.CARD_RECHARGE
+                    browser.automaticSubmitted = true
+                    val prepared = PreparedOfficialPage(browser)
+                    prepared.attach(activity, {}, {}, {}, {}, { token.complete((it as LoginResult.ContinueOnWeb).token) })
+                    activity.findViewById<FrameLayout>(android.R.id.content).addView(prepared.web)
+                    browser.onStarted()
+                    prepared.close() // AndroidView release must not destroy a transferred school challenge.
+                }
+                withContext(Dispatchers.Main) {
+                    val resumed = PendingLogin.take(token.await())!!
+                    assertSame(browser.web, resumed.web)
+                    assertFalse(resumed.destroyed)
+                    assertTrue(resumed.automaticSubmitted)
+                    assertEquals(OfficialPage.CARD_RECHARGE, resumed.pageTarget)
+                    assertFalse(resumed.serviceVisible)
+                }
+            } finally { withContext(Dispatchers.Main) { browser.destroy() } }
+        }
+    }
 }

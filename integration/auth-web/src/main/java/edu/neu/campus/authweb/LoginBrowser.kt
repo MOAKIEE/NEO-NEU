@@ -1,6 +1,7 @@
 package edu.neu.campus.authweb
 
 import android.app.Activity
+import android.content.Intent
 import android.content.MutableContextWrapper
 import android.graphics.Bitmap
 import android.net.Uri
@@ -14,6 +15,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.widget.Toast
 import edu.neu.campus.session.SchoolCredentials
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -38,6 +41,13 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
         private set
     var onChange: () -> Unit = {}
     var onLoaded: () -> Unit = {}
+    var onStarted: () -> Unit = {}
+    var onCommit: () -> Unit = {}
+    var onProgress: (Int) -> Unit = {}
+    // Fixed page identity travels with an in-memory challenge, never a ticket-bearing URL.
+    var pageTarget: OfficialPage? = null
+    var serviceVisible = false
+    var automaticSubmitted = false
     var destroyed = false
         private set
     var siteIndex = 0
@@ -52,9 +62,15 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
         settings.setSupportMultipleWindows(false)
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
+        settings.setSupportZoom(true)
+        settings.builtInZoomControls = true
+        settings.displayZoomControls = false
         isSaveEnabled = false
         if (android.os.Build.VERSION.SDK_INT >= 26) importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+        webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView, newProgress: Int) { onProgress(newProgress) }
+        }
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 if (!request.isForMainFrame) return false
@@ -66,6 +82,12 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
                     return true
                 }
                 if (school && url.scheme == "https" && (url.port == -1 || url.port == 443) && url.userInfo == null) return false
+                if (serviceVisible && url.scheme == "https" && url.userInfo == null) return false
+                if (serviceVisible && request.hasGesture() && url.scheme in setOf("alipays", "weixin")) {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url)) }
+                        .onFailure { Toast.makeText(context, "无法打开支付应用", Toast.LENGTH_SHORT).show() }
+                    return true
+                }
                 failed(LoginFailure.SECURITY)
                 return true
             }
@@ -79,6 +101,7 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
                 loading = true
                 failure = null
                 onChange()
+                onStarted()
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
@@ -86,6 +109,10 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
                 loading = false
                 onChange()
                 onLoaded()
+            }
+
+            override fun onPageCommitVisible(view: WebView, url: String?) {
+                if (url == view.url) onCommit()
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -133,7 +160,7 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
     fun park() {
         detach()
         context.baseContext = context.applicationContext
-        onChange = {}; onLoaded = {}
+        onChange = {}; onLoaded = {}; onStarted = {}; onCommit = {}; onProgress = {}
     }
 
     suspend fun inspect(credentials: SchoolCredentials? = null, submit: Boolean = false, submitted: Boolean = false): String {
@@ -153,10 +180,30 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
         }
     }
 
+    suspend fun hasMailboxLoginForm(): Boolean {
+        val uri = Uri.parse(web.url.orEmpty())
+        if (uri.scheme != "https" || uri.host != "mails.neu.edu.cn" || uri.port !in listOf(-1, 443) || uri.userInfo != null) return false
+        val observedRevision = revision
+        // Fixed boolean only; never inspect mailbox account/password values or invent one from a student ID.
+        val script = """
+            (function () {
+                if (location.origin !== 'https://mails.neu.edu.cn') return false;
+                var user = document.getElementById('uid'), password = document.getElementById('fakePassword');
+                return !!(user && password && user.form === password.form && password.type === 'password' &&
+                    user.getClientRects().length && password.getClientRects().length);
+            })()
+        """.trimIndent()
+        return suspendCancellableCoroutine { continuation ->
+            web.evaluateJavascript(script) { result ->
+                if (continuation.isActive) continuation.resume(observedRevision == revision && result == "true")
+            }
+        }
+    }
+
     fun destroy() {
         if (destroyed) return
         destroyed = true
-        onChange = {}; onLoaded = {}
+        onChange = {}; onLoaded = {}; onStarted = {}; onCommit = {}; onProgress = {}
         detach()
         web.stopLoading()
         web.destroy()

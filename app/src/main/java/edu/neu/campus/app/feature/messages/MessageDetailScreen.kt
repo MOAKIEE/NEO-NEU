@@ -3,8 +3,6 @@ package edu.neu.campus.app.feature.messages
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.navigation.AppNavigator
+import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.feature.services.OfficialService
 import edu.neu.campus.ui.components.CampusGroup
 import edu.neu.campus.ui.components.CampusSection
@@ -193,12 +193,7 @@ fun MessageDetailScreen(
                         ) {
                             Button(
                                 onClick = {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(OfficialService.PORTAL.url))
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "无法启动系统浏览器", Toast.LENGTH_SHORT).show()
-                                    }
+                                    AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.PORTAL))
                                 },
                                 colors = ButtonDefaults.buttonColorsPrimary(),
                                 modifier = Modifier.weight(1f)

@@ -36,9 +36,11 @@ sealed interface LoginResult {
 
 /** Entry points expose login state without exposing cookies or credentials to business pages. */
 object OfficialLogin {
-    fun intent(context: Context, domain: Domain = Domain.PORTAL, continuation: String? = null): Intent =
+    fun intent(context: Context, domain: Domain = Domain.PORTAL, continuation: String? = null,
+        credentialRejected: Boolean = false): Intent =
         Intent(context, OfficialLoginActivity::class.java).putExtra("target_domain", domain.name)
             .putExtra("continuation", continuation)
+            .putExtra("credential_rejected", credentialRejected)
 
     fun savedLoginStatus(context: Context): StateFlow<SavedLoginStatus> = LocalSession.get(context).savedLoginStatus
     suspend fun verifyExisting(context: Context) = SessionProbe.verify(LocalSession.get(context))
@@ -66,7 +68,7 @@ internal object PendingLogin {
 }
 
 internal object SchoolLogin {
-    private val lock = Mutex()
+    internal val lock = Mutex()
 
     suspend fun saveAndConnect(activity: Activity, target: Domain, credentials: SchoolCredentials): LoginResult = lock.withLock {
         val session = LocalSession.get(activity)

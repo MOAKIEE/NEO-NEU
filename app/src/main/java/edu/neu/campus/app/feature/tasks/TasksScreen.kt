@@ -3,8 +3,6 @@ package edu.neu.campus.app.feature.tasks
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -324,12 +322,7 @@ private fun SchemaChangedCard(context: Context) {
                 ) {
                     Button(
                         onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(OfficialService.PORTAL.url))
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "无法启动系统浏览器", Toast.LENGTH_SHORT).show()
-                            }
+                            AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.PORTAL))
                         },
                         colors = ButtonDefaults.buttonColorsPrimary(),
                         modifier = Modifier.weight(1f)
@@ -400,12 +393,8 @@ private fun TaskDetailDialog(
                 ) {
                     Button(
                         onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(OfficialService.PORTAL.url))
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "无法启动浏览器", Toast.LENGTH_SHORT).show()
-                            }
+                            onDismiss()
+                            AppNavigator.navigateTo(AppDestination.OfficialWeb(OfficialService.PORTAL))
                         },
                         colors = ButtonDefaults.buttonColorsPrimary(),
                         modifier = Modifier.weight(1f)

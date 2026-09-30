@@ -87,6 +87,7 @@ class OfficialLoginActivity : ComponentActivity() {
                 session.state.value.accountScope?.let { scope ->
                     model.account = session.readCredentials(scope, includePaused = true)?.account.orEmpty()
                 }
+                if (intent.getBooleanExtra("credential_rejected", false)) model.error = "学校未接受账号密码，请检查后重新填写。"
             }
         }
         setContent {
@@ -176,7 +177,8 @@ class OfficialLoginActivity : ComponentActivity() {
         browser.onChange = { model.selectedSite = browser.siteIndex; model.browserRevision++ }
         browser.onLoaded = {
             val host = android.net.Uri.parse(browser.web.url.orEmpty()).host
-            if (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn") checkConnection(automatic = true)
+            if (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn" ||
+                browser.pageTarget?.cataloguePage?.isDestination(browser.web.url.orEmpty()) == true) checkConnection(automatic = true)
         }
         scopeWatcher?.cancel()
         scopeWatcher = lifecycleScope.launch {
@@ -202,8 +204,22 @@ class OfficialLoginActivity : ComponentActivity() {
             model.busy = true
             try {
                 session.flushCookies()
-                val verified = SessionProbe.verify(session)
+                val verified = if (browser.pageTarget != null) SessionProbe.verifyPortal(session) else SessionProbe.verify(session)
                 if (verified.accountScope != browser.scope || browser.destroyed) return@launch
+                if (browser.pageTarget != null) {
+                    // Portal/page handoff returns to the original service; it does not detour through academic login.
+                    val host = android.net.Uri.parse(browser.web.url.orEmpty()).host
+                    val callbackReached = host == "personal.neu.edu.cn" ||
+                        browser.pageTarget!!.cataloguePage.isDestination(browser.web.url.orEmpty())
+                    if (callbackReached && verified.portal == DomainStatus.READY) {
+                        if (verified.academic == DomainStatus.AUTHENTICATING) {
+                            session.markIfScope(browser.scope, Domain.ACADEMIC, DomainStatus.UNVERIFIED)
+                        }
+                        finishConnected()
+                    }
+                    else model.error = if (!automatic) "请继续完成学校验证。" else null
+                    return@launch
+                }
                 when (nextLoginStep(target, verified, model.selectedSite, model.attemptedAcademicHandoff, automatic)) {
                     LoginStep.OPEN_ACADEMIC -> {
                         model.attemptedAcademicHandoff = true
@@ -288,22 +304,23 @@ private fun ChallengeScreen(model: LoginScreenModel, browser: LoginBrowser, stat
     model.browserRevision // Observe browser callbacks without retaining webpage contents in Compose state.
     val colors = CampusTheme.colors
     Column(Modifier.fillMaxSize()) {
-        CampusWebTopBar(title = "学校验证", host = android.net.Uri.parse(browser.web.url.orEmpty()).host.orEmpty(),
-            refreshing = browser.loading, onBack = onBack, onRefresh = { browser.web.reload() }, onClose = onBack)
+        CampusWebTopBar(title = browser.pageTarget?.title ?: "学校验证", host = android.net.Uri.parse(browser.web.url.orEmpty()).host.orEmpty(),
+            refreshing = browser.loading, onBack = onBack,
+            onRefresh = { browser.load(browser.pageTarget?.authenticationEntry ?: if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY) }, onClose = onBack)
         BoxWithConstraints(Modifier.weight(1f)) {
             val compact = maxHeight < 400.dp
             val keyboardSpace = maxHeight < 250.dp
             Column(Modifier.fillMaxSize().padding(horizontal = CampusSpacing.screenHorizontal).padding(bottom = CampusSpacing.sm),
                 verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)) {
                 if (!compact) Text("请完成学校页面上的验证码或其他验证。", fontSize = 13.sp, color = colors.textSecondary)
-                if (!keyboardSpace) CampusSegmentedControl(listOf("统一门户", "教务系统"), model.selectedSite, onSite)
+                if (!keyboardSpace && browser.pageTarget == null) CampusSegmentedControl(listOf("统一门户", "教务系统"), model.selectedSite, onSite)
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     AndroidView(factory = { browser.web }, modifier = Modifier.fillMaxSize())
                     browser.failure?.let { failure ->
                         Column(Modifier.fillMaxSize().background(colors.background).verticalScroll(rememberScrollState()).padding(CampusSpacing.md),
                             verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(failure.message, color = colors.error)
-                            CampusButton("重试打开网页", { browser.load(if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY) })
+                            CampusButton("重试打开网页", { browser.load(browser.pageTarget?.authenticationEntry ?: if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY) })
                         }
                     }
                     if (browser.loading) Text("正在打开学校网页…", modifier = Modifier.align(Alignment.TopCenter)
@@ -311,10 +328,11 @@ private fun ChallengeScreen(model: LoginScreenModel, browser: LoginBrowser, stat
                 }
                 if (!compact) {
                     model.error?.let { Text(it, fontSize = 13.sp, color = colors.warning) }
-                    Text("门户：${connectionLabel(state.portal)}  ·  教务：${connectionLabel(state.academic)}", fontSize = 12.sp, color = colors.textSecondary)
+                    if (browser.pageTarget == null) Text("门户：${connectionLabel(state.portal)}  ·  教务：${connectionLabel(state.academic)}", fontSize = 12.sp, color = colors.textSecondary)
                 }
                 if (!keyboardSpace) CampusButton(when {
                     model.busy -> "正在检查连接…"
+                    browser.pageTarget != null -> "完成验证，继续打开"
                     target == Domain.PORTAL && state.portal == DomainStatus.READY && state.academic != DomainStatus.READY -> "仅连接门户并返回"
                     else -> "完成验证，检查连接"
                 }, onCheck, modifier = Modifier.fillMaxWidth(), primary = true, enabled = !model.busy && !browser.loading)
