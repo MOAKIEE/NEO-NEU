@@ -39,7 +39,6 @@ import top.yukonga.miuix.kmp.basic.Text
 class MainActivity : ComponentActivity() {
     private val authCoordinator = AuthCoordinator()
     private var recoveryJob: Job? = null
-    private var openFormAfterRecovery = false
     private val automaticLoginGate = AutomaticLoginGate()
     private var lastECodeWarmScope: String? = null
     private var connectingSchool by mutableStateOf(false)
@@ -244,11 +243,11 @@ class MainActivity : ComponentActivity() {
             destination is AppDestination.Exams || destination is AppDestination.ExamDetail ||
             destination is AppDestination.Schedule || destination is AppDestination.BellSchedule
         val domain = preferredLoginDomain(state, academicPage)
-        if (state.accountScope != null &&
-            (state.portal != DomainStatus.READY || state.academic != DomainStatus.READY)) {
-            recoverSession(domain, openFormOnFailure = true)
-            return
-        }
+        // Explicit login always opens native entry, even with an expired school session.
+        // Cancel a silent attempt so its late challenge cannot replace the user's choice.
+        recoveryJob?.cancel()
+        connectingSchool = false
+        loginNotice = null
         openVisibleLogin(domain)
     }
 
@@ -266,7 +265,7 @@ class MainActivity : ComponentActivity() {
         }
         val now = android.os.SystemClock.elapsedRealtime()
         if (!automaticLoginGate.begin(scope, domain, now)) return
-        recoverSession(domain, openFormOnFailure = false)
+        recoverSession(domain)
     }
 
     private fun maybeWarmECode() {
@@ -288,14 +287,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun recoverSession(domain: Domain, openFormOnFailure: Boolean) {
-        if (authCoordinator.suppressResume()) return
-        if (recoveryJob?.isActive == true) {
-            openFormAfterRecovery = openFormAfterRecovery || openFormOnFailure
-            return
-        }
+    private fun recoverSession(domain: Domain) {
+        if (authCoordinator.suppressResume() || recoveryJob?.isActive == true) return
         val scope = CampusDataProvider.session.state.value.accountScope ?: return
-        openFormAfterRecovery = openFormOnFailure
         recoveryJob = lifecycleScope.launch {
             connectingSchool = true
             loginNotice = null
@@ -315,11 +309,9 @@ class MainActivity : ComponentActivity() {
                     is LoginResult.NeedCredentials -> {
                         automaticLoginGate.pause(scope, domain)
                         loginNotice = if (result.rejected) "账号密码未通过学校认证，自动登录已暂停。" else "请填写账号密码以启用自动登录。"
-                        if (openFormAfterRecovery) openVisibleLogin(domain)
                     }
                     is LoginResult.Failed -> {
                         loginNotice = result.message
-                        if (openFormAfterRecovery) openVisibleLogin(domain)
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -328,7 +320,6 @@ class MainActivity : ComponentActivity() {
                 loginNotice = "学校连接暂时无法恢复，请稍后重试。"
             } finally {
                 connectingSchool = false
-                openFormAfterRecovery = false
                 recoveryJob = null
             }
         }

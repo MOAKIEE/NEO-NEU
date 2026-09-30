@@ -111,17 +111,15 @@ fun SettingsScreen(
                 Spacer(Modifier.height(CampusSpacing.sm))
                 CampusButton(
                     text = when {
-                        connectingSchool -> "正在恢复学校连接…"
                         fullyConnected -> "重新认证学校账号"
                         sessionState.portal == DomainStatus.READY -> "连接教务系统"
                         else -> "登录学校账号"
                     },
                     onClick = onLoginClick,
                     modifier = Modifier.fillMaxWidth(),
-                    primary = !fullyConnected,
-                    enabled = !connectingSchool
+                    primary = !fullyConnected
                 )
-                Text(when (savedLogin) {
+                Text(if (connectingSchool) "正在恢复学校连接…" else when (savedLogin) {
                     SavedLoginStatus.NONE -> "尚未保存登录凭据"
                     SavedLoginStatus.ENABLED -> "已启用本机自动登录"
                     SavedLoginStatus.PAUSED -> "自动登录已暂停，请重新认证"
