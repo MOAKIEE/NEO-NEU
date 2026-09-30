@@ -1,408 +1,332 @@
 package edu.neu.campus.authweb
 
-import android.content.Context
-import android.content.Intent
-import android.graphics.Bitmap
-import android.net.Uri
 import android.os.Bundle
-import android.net.http.SslError
-import android.webkit.CookieManager
-import android.webkit.SslErrorHandler
-import android.webkit.WebResourceResponse
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.contract.Domain
+import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.contract.SessionState
 import edu.neu.campus.network.SessionProbe
 import edu.neu.campus.session.LocalSession
-import edu.neu.campus.ui.components.CampusSegmentedControl
-import edu.neu.campus.ui.theme.CampusShapes
+import edu.neu.campus.session.SavedLoginStatus
+import edu.neu.campus.session.SchoolCredentials
+import edu.neu.campus.ui.components.*
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
 import edu.neu.campus.ui.theme.ThemeManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 
-object OfficialLogin {
-    fun intent(context: Context, domain: Domain = Domain.PORTAL): Intent =
-        Intent(context, OfficialLoginActivity::class.java).putExtra("target_domain", domain.name)
-    suspend fun verifyExisting(context: Context) = SessionProbe.verify(LocalSession.get(context))
+/** Rotation retains a challenge in memory; process death never restores password text. */
+internal class LoginScreenModel : ViewModel() {
+    var account by mutableStateOf("")
+    var password by mutableStateOf("")
+    var busy by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+    var selectedSite by mutableIntStateOf(0)
+    var attemptedAcademicHandoff = false
+    var browser by mutableStateOf<LoginBrowser?>(null)
+    var browserRevision by mutableIntStateOf(0)
+    override fun onCleared() { password = ""; browser?.destroy() }
 }
 
-/** The WebView only opens school HTTPS pages and never reads form fields. */
+/** Native credential entry; the official WebView is visible only for interactive authentication. */
 class OfficialLoginActivity : ComponentActivity() {
-    private val portalUrl = "https://personal.neu.edu.cn/portal"
-    // The root redirects through HTTP on some school responses; use the observed HTTPS entry.
-    private val academicUrl = "https://jwxt.neu.edu.cn/jwapp/sys/homeapp/index.do"
     private lateinit var session: LocalSession
-    private lateinit var web: WebView
-    private var selectedSite by mutableIntStateOf(0)
-    private var pageLoading by mutableStateOf(false)
-    private var pageError by mutableStateOf<String?>(null)
-    private var checking by mutableStateOf(false)
-    private var hasChecked by mutableStateOf(false)
-    private var resumingSession = false
-    private var autoVerifyOnLoad = false
-    private var attemptedAcademicHandoff by mutableStateOf(false)
-    private var autoCheckJob: Job? = null
-    private var targetDomain = Domain.PORTAL
+    private lateinit var model: LoginScreenModel
+    private var target = Domain.PORTAL
+    private var loginJob: Job? = null
+    private var checkJob: Job? = null
+    private var scopeWatcher: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         ThemeManager.init(this)
         session = LocalSession.get(this)
-        targetDomain = runCatching { Domain.valueOf(intent.getStringExtra("target_domain").orEmpty()) }.getOrDefault(Domain.PORTAL)
-        resumingSession = session.state.value.accountScope != null
-        autoVerifyOnLoad = when (targetDomain) {
-            Domain.PORTAL -> session.state.value.portal != DomainStatus.READY
-            Domain.ACADEMIC -> session.state.value.academic != DomainStatus.READY
-        }
-        // No stable school account identifier is verified across both domains yet.
-        // A visible re-authentication may switch accounts, so rotate the local cache scope.
-        selectedSite = savedInstanceState?.getInt("selectedSite")
-            ?: if (targetDomain == Domain.ACADEMIC) 1 else 0
-        attemptedAcademicHandoff = savedInstanceState?.getBoolean("attemptedAcademicHandoff") ?: false
-
-        web = WebView(this).apply {
-            isFocusable = true
-            isFocusableInTouchMode = true
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.setSupportMultipleWindows(false)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    val url = request.url
-                    val host = url.host.orEmpty().lowercase()
-                    val schoolHost = host == "neu.edu.cn" || host.endsWith(".neu.edu.cn")
-                    if (url.scheme == "http" && schoolHost) {
-                        view.loadUrl(url.buildUpon().scheme("https").build().toString())
-                        return true
-                    }
-                    if (url.scheme == "https" && schoolHost) return false
-                    pageError = "已阻止非学校页面的跳转"
-                    return true
+        model = ViewModelProvider(this)[LoginScreenModel::class.java]
+        target = runCatching { Domain.valueOf(intent.getStringExtra("target_domain").orEmpty()) }.getOrDefault(Domain.PORTAL)
+        onBackPressedDispatcher.addCallback(this) { closeOrReturn() }
+        model.browser?.let { attachVisible(it) }
+        if (savedInstanceState == null && model.browser == null) {
+            val continuation = intent.getStringExtra("continuation")
+            if (continuation != null) lifecycleScope.launch {
+                val browser = PendingLogin.take(continuation)
+                if (browser != null && browser.scope == session.state.value.accountScope) {
+                    try { showChallenge(browser) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { model.error = LoginFailure.STORAGE.message }
                 }
-
-                override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                    autoCheckJob?.cancel()
-                    pageLoading = true
-                    pageError = null
-                }
-
-                override fun onPageFinished(view: WebView, url: String?) {
-                    pageLoading = false
-                    val host = Uri.parse(url.orEmpty()).host
-                    if (autoVerifyOnLoad && pageError == null &&
-                        (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn")) {
-                        autoCheckJob?.cancel()
-                        autoCheckJob = lifecycleScope.launch {
-                            delay(700)
-                            while (checking) delay(250)
-                            val currentHost = Uri.parse(web.url.orEmpty()).host
-                            if (!pageLoading &&
-                                (currentHost == "personal.neu.edu.cn" || currentHost == "jwxt.neu.edu.cn")) {
-                                checkConnection(automatic = true)
-                            }
-                        }
-                    }
-                }
-
-                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                    if (request.isForMainFrame) {
-                        pageLoading = false
-                        pageError = "学校网页暂时无法打开，请检查网络后重试。"
-                    }
-                }
-
-                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
-                    if (request.isForMainFrame) {
-                        pageLoading = false
-                        pageError = "学校网页返回 ${errorResponse.statusCode}，请稍后重试。"
-                    }
-                }
-
-                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
-                    handler.cancel()
-                    pageLoading = false
-                    pageError = "学校网页的安全连接验证失败，请检查设备时间或网络。"
+                else { browser?.destroy(); model.error = "验证页面已失效，请重新登录。" }
+            } else lifecycleScope.launch {
+                session.state.value.accountScope?.let { scope ->
+                    model.account = session.readCredentials(scope, includePaused = true)?.account.orEmpty()
                 }
             }
-        }
-        lifecycleScope.launch {
-            if (savedInstanceState == null) session.beginLogin()
-            if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
-                web.loadUrl(if (selectedSite == 0) portalUrl else academicUrl)
-            }
-        }
-        onBackPressedDispatcher.addCallback(this) {
-            if (web.canGoBack()) web.goBack() else finish()
         }
         setContent {
             CampusTheme {
                 val state by session.state.collectAsState()
-                LoginScreen(
-                    state = state,
-                    selectedSite = selectedSite,
-                    pageLoading = pageLoading,
-                    pageError = pageError,
-                    checking = checking,
-                    hasChecked = hasChecked,
-                    resumingSession = resumingSession,
-                    allowPortalOnly = targetDomain == Domain.PORTAL && attemptedAcademicHandoff &&
-                        state.portal == DomainStatus.READY && state.academic != DomainStatus.READY,
-                    web = web,
-                    onSelectSite = ::openSite,
-                    onCheck = { checkConnection() },
-                    onRetry = { web.reload() },
-                    onClose = ::finish
-                )
+                val saved by session.savedLoginStatus.collectAsState()
+                Scaffold(containerColor = CampusTheme.colors.background) { padding ->
+                    Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
+                        val browser = model.browser
+                        if (browser == null) CredentialScreen(model, saved, onBack = ::finish,
+                            onSubmit = ::saveAndLogin, onSaved = ::resumeSaved, onOfficial = ::openOfficial)
+                        else ChallengeScreen(model, browser, state, target,
+                            onBack = ::closeOrReturn, onCheck = { checkConnection() }, onSite = ::openSite)
+                    }
+                }
             }
+        }
+    }
+
+    private fun saveAndLogin() {
+        if (model.busy) return
+        val account = model.account.trim()
+        if (account.isBlank() || model.password.isEmpty()) { model.error = "请填写学号和密码。"; return }
+        val credentials = SchoolCredentials(account, model.password)
+        model.password = ""
+        runLogin { SchoolLogin.saveAndConnect(this, target, credentials) }
+    }
+
+    private fun resumeSaved() = runLogin { SchoolLogin.recover(this, target) }
+
+    private fun runLogin(block: suspend () -> LoginResult) {
+        if (model.busy) return
+        model.busy = true
+        model.error = null
+        model.attemptedAcademicHandoff = false
+        loginJob = lifecycleScope.launch {
+            try {
+                when (val result = block()) {
+                    LoginResult.Connected -> finishConnected()
+                    is LoginResult.ContinueOnWeb -> {
+                        val browser = PendingLogin.take(result.token)
+                        if (browser != null && browser.scope == session.state.value.accountScope) showChallenge(browser)
+                        else { browser?.destroy(); model.error = "登录状态已变化，请重试。" }
+                    }
+                    is LoginResult.NeedCredentials -> model.error = if (result.rejected)
+                        "学校未接受账号密码，自动登录已暂停，请检查后重新填写。" else "请重新填写账号密码。"
+                    is LoginResult.Failed -> model.error = result.message
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { model.error = "登录未完成，请重试。" }
+            finally { model.busy = false }
+        }
+    }
+
+    private fun openOfficial() {
+        if (model.busy) return
+        model.password = ""
+        model.error = null
+        model.attemptedAcademicHandoff = false
+        model.busy = true
+        loginJob = lifecycleScope.launch {
+            try {
+                val scope = session.beginLogin()
+                val browser = LoginBrowser(this@OfficialLoginActivity, scope)
+                model.selectedSite = if (target == Domain.ACADEMIC) 1 else 0
+                attachVisible(browser)
+                browser.load(if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { model.error = "学校网页登录暂时无法打开，请重试。" }
+            finally { model.busy = false }
+        }
+    }
+
+    private suspend fun showChallenge(browser: LoginBrowser) {
+        // Visible forms can switch accounts. Isolate personal caches before allowing interaction.
+        val scope = try { session.beginLogin(keepCredentials = true) }
+        catch (error: Exception) { browser.destroy(); throw error }
+        browser.scope = scope
+        model.selectedSite = browser.siteIndex
+        model.error = null
+        attachVisible(browser)
+    }
+
+    private fun attachVisible(browser: LoginBrowser) {
+        browser.attachTo(this, visible = true)
+        model.browser = browser
+        browser.onChange = { model.selectedSite = browser.siteIndex; model.browserRevision++ }
+        browser.onLoaded = {
+            val host = android.net.Uri.parse(browser.web.url.orEmpty()).host
+            if (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn") checkConnection(automatic = true)
+        }
+        scopeWatcher?.cancel()
+        scopeWatcher = lifecycleScope.launch {
+            session.state.first { it.accountScope != browser.scope }
+            browser.destroy()
+            if (model.browser === browser) model.browser = null
+            model.error = "账号状态已变化，请重新登录。"
         }
     }
 
     private fun openSite(index: Int) {
-        if (index !in 0..1) return
-        selectedSite = index
-        pageError = null
-        web.loadUrl(if (index == 0) portalUrl else academicUrl)
+        if (model.busy || index !in 0..1) return
+        model.selectedSite = index
+        model.browser?.load(if (index == 0) PORTAL_ENTRY else ACADEMIC_ENTRY)
     }
 
     private fun checkConnection(automatic: Boolean = false) {
-        if (checking) return
-        checking = true
-        lifecycleScope.launch {
+        if (checkJob?.isActive == true) return
+        val browser = model.browser ?: return
+        checkJob = lifecycleScope.launch {
+            if (automatic) delay(700)
+            if (browser.destroyed || session.state.value.accountScope != browser.scope) return@launch
+            model.busy = true
             try {
-                // Commit cookies set by the official page before native HTTP probes run.
                 session.flushCookies()
-                val result = SessionProbe.verify(session)
-                hasChecked = true
-                when (nextLoginStep(targetDomain, result, selectedSite, attemptedAcademicHandoff, automatic)) {
+                val verified = SessionProbe.verify(session)
+                if (verified.accountScope != browser.scope || browser.destroyed) return@launch
+                when (nextLoginStep(target, verified, model.selectedSite, model.attemptedAcademicHandoff, automatic)) {
                     LoginStep.OPEN_ACADEMIC -> {
-                        attemptedAcademicHandoff = true
-                        openSite(1)
+                        model.attemptedAcademicHandoff = true
+                        model.selectedSite = 1
+                        browser.load(ACADEMIC_ENTRY)
                     }
-                    LoginStep.FINISH -> {
-                        autoVerifyOnLoad = false
-                        setResult(RESULT_OK)
-                        finish()
-                    }
-                    LoginStep.WAIT -> Unit
+                    LoginStep.FINISH -> finishConnected()
+                    LoginStep.WAIT -> model.error = if (!automatic) "连接尚未完成，请继续学校验证或检查网络。" else null
                 }
-            } finally {
-                checking = false
-            }
+            } finally { model.busy = false }
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt("selectedSite", selectedSite)
-        outState.putBoolean("attemptedAcademicHandoff", attemptedAcademicHandoff)
-        web.saveState(outState)
-        super.onSaveInstanceState(outState)
+    private fun finishConnected() {
+        model.password = ""
+        setResult(RESULT_OK)
+        finish()
+    }
+
+    private fun closeOrReturn() {
+        if (model.browser != null) {
+            checkJob?.cancel(); scopeWatcher?.cancel()
+            model.browser?.destroy(); model.browser = null
+            model.busy = false
+            model.error = "学校验证尚未完成。"
+            lifecycleScope.launch { SessionProbe.verify(session) }
+        } else finish()
+    }
+
+    override fun onStop() {
+        loginJob?.cancel()
+        super.onStop()
     }
 
     override fun onDestroy() {
-        autoCheckJob?.cancel()
-        web.stopLoading()
-        web.destroy()
+        scopeWatcher?.cancel(); checkJob?.cancel()
+        if (isChangingConfigurations) model.browser?.park()
+        else { model.browser?.destroy(); model.browser = null; model.password = "" }
         super.onDestroy()
     }
 }
 
 @Composable
-private fun LoginScreen(
-    state: SessionState,
-    selectedSite: Int,
-    pageLoading: Boolean,
-    pageError: String?,
-    checking: Boolean,
-    hasChecked: Boolean,
-    resumingSession: Boolean,
-    allowPortalOnly: Boolean,
-    web: WebView,
-    onSelectSite: (Int) -> Unit,
-    onCheck: () -> Unit,
-    onRetry: () -> Unit,
-    onClose: () -> Unit
-) {
+private fun CredentialScreen(model: LoginScreenModel, saved: SavedLoginStatus, onBack: () -> Unit,
+    onSubmit: () -> Unit, onSaved: () -> Unit, onOfficial: () -> Unit) {
     val colors = CampusTheme.colors
-    Scaffold(
-        modifier = Modifier.fillMaxSize().background(colors.background),
-        containerColor = colors.background
-    ) { padding ->
-        Box(
-            modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)
-                .imePadding().background(colors.background)
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(56.dp)
-                        .padding(horizontal = CampusSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onClose) {
-                        Icon(MiuixIcons.Regular.Back, contentDescription = "返回", tint = colors.textPrimary)
-                    }
-                    Column(modifier = Modifier.padding(start = CampusSpacing.xs)) {
-                        Text("学校登录", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
-                        Text("账号密码仅在学校官方网页输入", fontSize = 11.sp, color = colors.textSecondary)
-                    }
-                }
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = CampusSpacing.screenHorizontal)
-                        .padding(bottom = CampusSpacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        ConnectionStatus("统一门户", state.portal, Modifier.weight(1f))
-                        Spacer(Modifier.width(1.dp).height(36.dp).background(colors.divider))
-                        ConnectionStatus("教务系统", state.academic, Modifier.weight(1f))
-                    }
-                    CampusSegmentedControl(
-                        options = listOf("统一门户", "教务系统"),
-                        selectedIndex = selectedSite,
-                        onSelect = onSelectSite
-                    )
-                    Box(
-                        modifier = Modifier.fillMaxWidth().weight(1f)
-                            .clip(RoundedCornerShape(CampusShapes.medium))
-                            .background(Color.White)
-                            .border(1.dp, colors.outline, RoundedCornerShape(CampusShapes.medium))
-                    ) {
-                        AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
-                        if (pageError != null) {
-                            Column(
-                                modifier = Modifier.fillMaxSize().background(Color.White)
-                                    .padding(CampusSpacing.md),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(pageError, fontSize = 14.sp, color = colors.warning)
-                                Spacer(Modifier.height(CampusSpacing.md))
-                                Button(onClick = onRetry) { Text("重试打开网页") }
-                            }
-                        } else if (pageLoading) {
-                            Text(
-                                "正在打开学校网页…",
-                                modifier = Modifier.align(Alignment.TopCenter)
-                                    .clip(RoundedCornerShape(CampusShapes.small))
-                                    .background(colors.surface)
-                                    .padding(horizontal = CampusSpacing.sm, vertical = CampusSpacing.xs),
-                                fontSize = 12.sp,
-                                color = colors.textSecondary
-                            )
-                        }
-                    }
-                    Button(onClick = onCheck, enabled = !checking && !pageLoading, modifier = Modifier.fillMaxWidth()) {
-                        Text(when {
-                            checking -> "正在检查门户与教务…"
-                            state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "检查连接并返回应用"
-                            allowPortalOnly -> "仅连接门户并返回应用"
-                            else -> "完成登录，检查连接"
-                        })
-                    }
-                    Text(
-                        connectionHint(state, hasChecked),
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                        color = colors.textSecondary
-                    )
-                    if (resumingSession) {
-                        Text(
-                            "已保留学校会话；本地数据已重新隔离，换号后不会沿用旧缓存。",
-                            fontSize = 11.sp,
-                            color = colors.textTertiary
-                        )
+    val scroll = MiuixScrollBehavior()
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    Column(Modifier.fillMaxSize().background(colors.background).nestedScroll(scroll.nestedScrollConnection)) {
+        CampusTopBar("登录学校账号", onBack = onBack, scrollBehavior = scroll, defaultWindowInsetsPadding = false)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = CampusSpacing.screenHorizontal)
+            .padding(top = CampusSpacing.xs, bottom = CampusSpacing.screenBottom),
+            verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
+            CampusPageEnter {
+                CampusCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(CampusSpacing.md)) {
+                        CampusCredentialField(model.account, { if (it.length <= 256) model.account = it }, "学号", enabled = !model.busy)
+                        CampusCredentialField(model.password, { if (it.length <= 4096) model.password = it }, "学校统一认证密码", password = true, enabled = !model.busy)
+                        Text("账号密码加密保存在本机，登录时仅发送到学校认证页面。", fontSize = 12.sp, color = colors.textSecondary)
+                        CampusButton(if (model.busy) "正在连接学校…" else "保存并登录", { focus.clearFocus(); keyboard?.hide(); onSubmit() },
+                            modifier = Modifier.fillMaxWidth(), primary = true, enabled = !model.busy)
                     }
                 }
             }
+            if (model.busy) Row(horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                Text("正在后台登录并检查门户、教务连接…", fontSize = 13.sp, color = colors.textSecondary)
+            }
+            model.error?.let { Text(it, fontSize = 13.sp, color = colors.error) }
+            if (saved == SavedLoginStatus.ENABLED) CampusButton("使用已保存账号继续", onSaved,
+                modifier = Modifier.fillMaxWidth(), enabled = !model.busy)
+            if (saved == SavedLoginStatus.PAUSED && !model.busy && model.error == null) Text("自动登录已暂停，请重新填写密码或完成学校验证。", fontSize = 13.sp, color = colors.warning)
+            CampusButton("使用学校网页登录", onOfficial, modifier = Modifier.fillMaxWidth(), enabled = !model.busy)
         }
     }
 }
 
 @Composable
-private fun ConnectionStatus(name: String, status: DomainStatus, modifier: Modifier = Modifier) {
+private fun ChallengeScreen(model: LoginScreenModel, browser: LoginBrowser, state: SessionState, target: Domain,
+    onBack: () -> Unit, onCheck: () -> Unit, onSite: (Int) -> Unit) {
+    model.browserRevision // Observe browser callbacks without retaining webpage contents in Compose state.
     val colors = CampusTheme.colors
-    val (label, tint) = when (status) {
-        DomainStatus.READY -> "已连接" to colors.success
-        DomainStatus.SIGNED_OUT -> "未登录" to colors.textSecondary
-        DomainStatus.AUTHENTICATING -> "等待登录" to colors.brand
-        DomainStatus.UNVERIFIED -> "待检查" to colors.warning
-        DomainStatus.EXPIRED -> "需要登录" to colors.warning
-        DomainStatus.UNREACHABLE -> "暂不可达" to colors.textSecondary
-    }
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(CampusSpacing.xs)
-    ) {
-        Text(name, fontSize = 12.sp, color = colors.textSecondary)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tint)
+    Column(Modifier.fillMaxSize()) {
+        CampusWebTopBar(title = "学校验证", host = android.net.Uri.parse(browser.web.url.orEmpty()).host.orEmpty(),
+            refreshing = browser.loading, onBack = onBack, onRefresh = { browser.web.reload() }, onClose = onBack)
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val compact = maxHeight < 400.dp
+            val keyboardSpace = maxHeight < 250.dp
+            Column(Modifier.fillMaxSize().padding(horizontal = CampusSpacing.screenHorizontal).padding(bottom = CampusSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(CampusSpacing.sm)) {
+                if (!compact) Text("请完成学校页面上的验证码或其他验证。", fontSize = 13.sp, color = colors.textSecondary)
+                if (!keyboardSpace) CampusSegmentedControl(listOf("统一门户", "教务系统"), model.selectedSite, onSite)
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    AndroidView(factory = { browser.web }, modifier = Modifier.fillMaxSize())
+                    browser.failure?.let { failure ->
+                        Column(Modifier.fillMaxSize().background(colors.background).verticalScroll(rememberScrollState()).padding(CampusSpacing.md),
+                            verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(failure.message, color = colors.error)
+                            CampusButton("重试打开网页", { browser.load(if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY) })
+                        }
+                    }
+                    if (browser.loading) Text("正在打开学校网页…", modifier = Modifier.align(Alignment.TopCenter)
+                        .background(colors.surface).padding(CampusSpacing.xs), fontSize = 12.sp, color = colors.textSecondary)
+                }
+                if (!compact) {
+                    model.error?.let { Text(it, fontSize = 13.sp, color = colors.warning) }
+                    Text("门户：${connectionLabel(state.portal)}  ·  教务：${connectionLabel(state.academic)}", fontSize = 12.sp, color = colors.textSecondary)
+                }
+                if (!keyboardSpace) CampusButton(when {
+                    model.busy -> "正在检查连接…"
+                    target == Domain.PORTAL && state.portal == DomainStatus.READY && state.academic != DomainStatus.READY -> "仅连接门户并返回"
+                    else -> "完成验证，检查连接"
+                }, onCheck, modifier = Modifier.fillMaxWidth(), primary = true, enabled = !model.busy && !browser.loading)
+            }
+        }
     }
 }
 
-private fun connectionHint(state: SessionState, hasChecked: Boolean): String {
-    if (!hasChecked) return when {
-        state.portal == DomainStatus.READY && state.academic == DomainStatus.READY ->
-            "当前连接正常；重新认证后点下方按钮确认连接。"
-        state.portal == DomainStatus.READY -> "门户已连接；应用会自动尝试打开教务页面。"
-        state.academic == DomainStatus.READY -> "教务已连接；请在门户页面完成登录，再检查连接。"
-        else -> "先在网页完成学校登录；门户成功后会自动尝试连接教务。"
-    }
-    return when {
-        state.portal == DomainStatus.READY && state.academic == DomainStatus.READY -> "门户与教务均已连接。"
-        state.portal == DomainStatus.READY && state.academic == DomainStatus.EXPIRED -> "门户已连接；请在教务页面完成登录，再检查一次。"
-        state.academic == DomainStatus.READY && state.portal == DomainStatus.EXPIRED -> "教务已连接；请在门户页面完成登录，再检查一次。"
-        state.portal == DomainStatus.UNREACHABLE || state.academic == DomainStatus.UNREACHABLE ->
-            "部分连接暂时无法确认，请检查网络或稍后重试。"
-        else -> "尚未建立学校连接，请在官方网页完成登录后重试。"
-    }
+private fun connectionLabel(status: DomainStatus) = when (status) {
+    DomainStatus.READY -> "已连接"
+    DomainStatus.UNREACHABLE -> "暂不可达"
+    DomainStatus.UNVERIFIED -> "待检查"
+    DomainStatus.AUTHENTICATING -> "认证中"
+    else -> "未连接"
 }

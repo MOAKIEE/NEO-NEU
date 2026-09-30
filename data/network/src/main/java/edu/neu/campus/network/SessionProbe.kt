@@ -26,12 +26,17 @@ object SessionProbe {
 
     suspend fun verify(session: LocalSession, http: SchoolHttp = clientFor(session)): SessionState = verifyLock.withLock {
         val scope = session.state.value.accountScope ?: return@withLock session.state.value
+        var portalAccount: String? = null
         val (portal, academic) = coroutineScope {
             val portal = async {
                 probe {
                     val root = JSONObject(http.execute(SchoolCall.PORTAL_INFO))
                     when (root.optInt("e", -1)) {
-                        0 -> if (root.optJSONObject("d") != null) DomainStatus.READY else DomainStatus.UNREACHABLE
+                        0 -> {
+                            portalAccount = root.optJSONObject("d")?.optJSONObject("info")
+                                ?.optString("xgh")?.takeIf { it.isNotBlank() }
+                            if (root.optJSONObject("d") != null) DomainStatus.READY else DomainStatus.UNREACHABLE
+                        }
                         10013 -> DomainStatus.EXPIRED
                         else -> DomainStatus.UNREACHABLE
                     }
@@ -50,6 +55,10 @@ object SessionProbe {
         }
         if (session.state.value.accountScope != scope) return@withLock session.state.value
         session.completeVerification(scope, portal, academic)
+        // Reuse this probe's account field, including after a cancelled attempt or process restart.
+        // Missing/mismatched fields cannot silently re-enable a saved password.
+        if (portal == DomainStatus.READY) session.confirmSavedAccount(scope, portalAccount)
+        session.state.value
     }
 
     private suspend fun probe(block: suspend () -> DomainStatus): DomainStatus = try {
@@ -62,4 +71,5 @@ object SessionProbe {
     } catch (error: CancellationException) {
         throw error
     } catch (_: Exception) { DomainStatus.UNREACHABLE }
+
 }

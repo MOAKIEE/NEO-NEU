@@ -21,6 +21,8 @@ import edu.neu.campus.app.feature.balance.BalancePrivacyManager
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.contract.DomainStatus
+import edu.neu.campus.authweb.OfficialLogin
+import edu.neu.campus.session.SavedLoginStatus
 import edu.neu.campus.ui.components.*
 import edu.neu.campus.ui.theme.AppThemeMode
 import edu.neu.campus.ui.theme.CampusShapes
@@ -42,13 +44,15 @@ import top.yukonga.miuix.kmp.icon.extended.Theme
 @Composable
 fun SettingsScreen(
     onLoginClick: () -> Unit,
-    connectingAcademic: Boolean = false,
+    connectingSchool: Boolean = false,
+    loginNotice: String? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val colors = CampusTheme.colors
     val sessionState by CampusDataProvider.session.state.collectAsState()
+    val savedLogin by OfficialLogin.savedLoginStatus(context).collectAsState()
     var showSignOutConfirm by rememberSaveable { mutableStateOf(false) }
     var showThemeOptions by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
@@ -103,11 +107,11 @@ fun SettingsScreen(
                 CampusGroupDivider()
                 Spacer(Modifier.height(CampusSpacing.xs))
                 DomainStatusRow("统一门户", sessionState.portal)
-                DomainStatusRow("教务系统", if (connectingAcademic) DomainStatus.AUTHENTICATING else sessionState.academic)
+                DomainStatusRow("教务系统", sessionState.academic)
                 Spacer(Modifier.height(CampusSpacing.sm))
                 CampusButton(
                     text = when {
-                        connectingAcademic -> "正在连接教务系统…"
+                        connectingSchool -> "正在恢复学校连接…"
                         fullyConnected -> "重新认证学校账号"
                         sessionState.portal == DomainStatus.READY -> "连接教务系统"
                         else -> "登录学校账号"
@@ -115,12 +119,18 @@ fun SettingsScreen(
                     onClick = onLoginClick,
                     modifier = Modifier.fillMaxWidth(),
                     primary = !fullyConnected,
-                    enabled = !connectingAcademic
+                    enabled = !connectingSchool
                 )
+                Text(when (savedLogin) {
+                    SavedLoginStatus.NONE -> "尚未保存登录凭据"
+                    SavedLoginStatus.ENABLED -> "已启用本机自动登录"
+                    SavedLoginStatus.PAUSED -> "自动登录已暂停，请重新认证"
+                }, fontSize = 12.sp, color = colors.textSecondary)
+                loginNotice?.let { Text(it, fontSize = 12.sp, color = colors.warning) }
                 Spacer(Modifier.height(CampusSpacing.xxs))
                 CampusRow(
                     title = if (checkingConnection) "正在检查连接…" else "检查连接",
-                    enabled = !checkingConnection && !connectingAcademic && sessionState.accountScope != null,
+                    enabled = !checkingConnection && !connectingSchool && sessionState.accountScope != null,
                     showChevron = true,
                     onClick = {
                         if (!checkingConnection) {
@@ -212,7 +222,7 @@ fun SettingsScreen(
                         ) {
                             Text("版本：1.0.0", fontSize = 13.sp, color = colors.textPrimary)
                             Text(
-                                "登录通过学校官方页面完成，本应用不保存你的密码。\n仅提供信息查询，不选课、不支付、不提交申请。",
+                                "保存的账号密码仅在本机加密存储，学校验证需要时由你继续操作。\n仅提供信息查询，不选课、不支付、不提交申请。",
                                 fontSize = 12.sp,
                                 lineHeight = 20.sp,
                                 color = colors.textSecondary
@@ -227,7 +237,7 @@ fun SettingsScreen(
     top.yukonga.miuix.kmp.overlay.OverlayDialog(
         show = showSignOutConfirm,
         title = "退出并清除本地数据",
-        summary = "将退出学校账号，清除本机学校会话和当前账号查询缓存。不会修改学校数据；再次查询需要重新登录。",
+        summary = "将退出学校账号，删除本机保存的账号密码、学校会话和当前账号查询缓存。再次查询需要重新登录。",
         onDismissRequest = { if (!signingOut) showSignOutConfirm = false }
     ) {
         // 与 Miuix 对话框一致：取消在左、确认在右，两个按钮等宽并排。

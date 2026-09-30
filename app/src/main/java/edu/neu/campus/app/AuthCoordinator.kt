@@ -43,3 +43,22 @@ class AuthCoordinator {
         }
     }
 }
+
+/** One silent attempt per domain, with a cooldown; interactive failures wait for a user action. */
+internal class AutomaticLoginGate {
+    private data class Attempt(val at: Long, val paused: Boolean)
+    private var currentScope: String? = null
+    private val attempts = mutableMapOf<Domain, Attempt>()
+
+    @Synchronized fun begin(scope: String, domain: Domain, now: Long): Boolean {
+        if (currentScope != scope) { currentScope = scope; attempts.clear() }
+        val previous = attempts[domain]
+        if (previous != null && (previous.paused || now - previous.at < 60_000)) return false
+        attempts[domain] = Attempt(now, paused = false)
+        return true
+    }
+
+    @Synchronized fun pause(scope: String, domain: Domain) {
+        if (currentScope == scope) attempts[domain] = Attempt(attempts[domain]?.at ?: 0, paused = true)
+    }
+}

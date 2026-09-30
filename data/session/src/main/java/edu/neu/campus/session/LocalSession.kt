@@ -34,12 +34,20 @@ class LocalSession(context: Context) {
             if (savedScope == null) DomainStatus.SIGNED_OUT else DomainStatus.UNVERIFIED)
     )
     val state: StateFlow<SessionState> = mutableState
+    private val savedCredentials = SavedSchoolCredentials(context)
+    val savedLoginStatus: StateFlow<SavedLoginStatus> = savedCredentials.status
     private val scopeListeners = mutableListOf<(String?) -> Unit>()
+    private var sessionGeneration = 0L
     @Synchronized fun addScopeListener(listener: (String?) -> Unit) { scopeListeners += listener }
 
-    suspend fun beginLogin() = cookieWrites.withLock {
+    suspend fun beginLogin(keepCredentials: Boolean = false, clearCookies: Boolean = false) = cookieWrites.withLock {
+        val generation = synchronized(this) { sessionGeneration }
+        val previousScope = state.value.accountScope
+        val credentials = if (keepCredentials && previousScope != null) {
+            withContext(Dispatchers.IO) { savedCredentials.read(previousScope, includePaused = true) }
+        } else null
         val hadScope = state.value.accountScope != null
-        if (!hadScope) {
+        if (!hadScope || clearCookies) {
             // A fresh login cannot inherit cookies left by an interrupted sign-out.
             withContext(Dispatchers.Main.immediate) {
                 suspendCancellableCoroutine<Unit> { continuation ->
@@ -50,11 +58,48 @@ class LocalSession(context: Context) {
         }
         // Rotating the local scope isolates old cached data if the official page switches accounts.
         // Existing CAS and business cookies remain available for SSO during recovery.
-        synchronized(this) {
+        val nextScope = synchronized(this) {
+            if (sessionGeneration != generation) throw CancellationException("Account scope changed")
+            sessionGeneration++
             val scope = UUID.randomUUID().toString()
             preferences.edit().putString("scope", scope).apply()
             mutableState.value = SessionState(scope, DomainStatus.AUTHENTICATING, DomainStatus.AUTHENTICATING)
             scopeListeners.forEach { it(scope) }
+            scope
+        }
+        withContext(Dispatchers.IO) {
+            if (state.value.accountScope != nextScope) throw CancellationException("Account scope changed")
+            if (credentials != null) savedCredentials.save(nextScope, credentials, paused = true)
+            else savedCredentials.clear()
+        }
+        if (state.value.accountScope != nextScope) throw CancellationException("Account scope changed")
+        nextScope
+    }
+
+    suspend fun saveCredentials(scope: String, credentials: SchoolCredentials): Boolean = cookieWrites.withLock {
+        if (state.value.accountScope != scope) return@withLock false
+        withContext(Dispatchers.IO) { savedCredentials.save(scope, credentials) }
+        state.value.accountScope == scope
+    }
+
+    suspend fun readCredentials(scope: String, includePaused: Boolean = false): SchoolCredentials? = cookieWrites.withLock {
+        if (state.value.accountScope != scope) return@withLock null
+        withContext(Dispatchers.IO) { savedCredentials.read(scope, includePaused) }
+    }
+
+    suspend fun pauseAutomaticLogin(scope: String) = cookieWrites.withLock {
+        if (state.value.accountScope == scope) withContext(Dispatchers.IO) { savedCredentials.pause() }
+    }
+
+    suspend fun confirmSavedAccount(scope: String, account: String?) = cookieWrites.withLock {
+        if (state.value.accountScope != scope) return@withLock
+        withContext(Dispatchers.IO) {
+            val credentials = savedCredentials.read(scope, includePaused = true) ?: return@withContext
+            when {
+                account.isNullOrBlank() -> savedCredentials.pause()
+                credentials.account == account -> savedCredentials.enable()
+                else -> savedCredentials.clear()
+            }
         }
     }
 
@@ -104,18 +149,26 @@ class LocalSession(context: Context) {
 
     suspend fun signOut() {
         synchronized(this) {
+            sessionGeneration++
             preferences.edit().remove("scope").apply()
             mutableState.value = SessionState(null, DomainStatus.SIGNED_OUT, DomainStatus.SIGNED_OUT)
             scopeListeners.forEach { it(null) }
         }
         cookieWrites.withLock {
             if (state.value.accountScope != null) return@withLock
-            withContext(Dispatchers.Main.immediate) {
-                suspendCancellableCoroutine<Unit> { continuation ->
-                    cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
+            try {
+                withContext(Dispatchers.IO) { savedCredentials.clear() }
+            } finally {
+                try {
+                    withContext(Dispatchers.Main.immediate) {
+                        suspendCancellableCoroutine<Unit> { continuation ->
+                            cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
+                        }
+                    }
+                } finally {
+                    withContext(Dispatchers.IO) { cookies.flush() }
                 }
             }
-            withContext(Dispatchers.IO) { cookies.flush() }
         }
     }
 }

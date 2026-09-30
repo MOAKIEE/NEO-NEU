@@ -24,7 +24,7 @@ import edu.neu.campus.app.feature.today.TodayScreen
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.authweb.OfficialLogin
-import edu.neu.campus.authweb.AcademicSsoConnector
+import edu.neu.campus.authweb.LoginResult
 import edu.neu.campus.ecode.ECodeSsoConnector
 import edu.neu.campus.ecode.OfficialECodeRepository
 import edu.neu.campus.contract.Domain
@@ -38,20 +38,25 @@ import top.yukonga.miuix.kmp.basic.Text
 
 class MainActivity : ComponentActivity() {
     private val authCoordinator = AuthCoordinator()
-    private var academicReconnectJob: Job? = null
-    private var openLoginAfterReconnect = false
-    private var lastAutomaticReconnectScope: String? = null
-    private var lastAutomaticReconnectAt = 0L
+    private var recoveryJob: Job? = null
+    private var openFormAfterRecovery = false
+    private val automaticLoginGate = AutomaticLoginGate()
     private var lastECodeWarmScope: String? = null
-    private var connectingAcademic by mutableStateOf(false)
+    private var connectingSchool by mutableStateOf(false)
+    private var loginNotice by mutableStateOf<String?>(null)
+    private var lastVerificationScope: String? = null
+    private var lastVerificationAt = 0L
 
     private val loginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        lastVerificationScope = CampusDataProvider.session.state.value.accountScope
+        lastVerificationAt = android.os.SystemClock.elapsedRealtime()
         if (authCoordinator.complete(result.resultCode == RESULT_OK)) {
             lifecycleScope.launch {
                 try {
                     CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.MANUAL)
                 } finally {
                     authCoordinator.replayFinished()
+                    maybeRecoverSession()
                 }
             }
         } else {
@@ -68,17 +73,13 @@ class MainActivity : ComponentActivity() {
         ECodePreferences.init(this)
         edu.neu.campus.app.feature.balance.BalancePrivacyManager.init(this)
         edu.neu.campus.app.feature.messages.MessagesManager.init(this)
-        if (!authCoordinator.suppressResume() && CampusDataProvider.session.state.value.accountScope != null) {
-            lifecycleScope.launch { CampusDataProvider.session.verify() }
-        }
-
         setContent {
             CampusTheme {
                 val session by CampusDataProvider.session.state.collectAsState()
                 val tab = AppNavigator.currentTab
                 val destination = AppNavigator.currentDestination
                 LaunchedEffect(session.accountScope, session.portal, session.academic) {
-                    maybeReconnectAcademic()
+                    maybeRecoverSession()
                     maybeWarmECode()
                 }
                 LaunchedEffect(session.accountScope, tab, destination) {
@@ -98,7 +99,8 @@ class MainActivity : ComponentActivity() {
                     settingsScreen = {
                         edu.neu.campus.app.feature.settings.SettingsScreen(
                             onLoginClick = { launchLogin() },
-                            connectingAcademic = connectingAcademic
+                            connectingSchool = connectingSchool,
+                            loginNotice = loginNotice
                         )
                     },
                     subScreen = { dest ->
@@ -227,24 +229,27 @@ class MainActivity : ComponentActivity() {
             destination is AppDestination.Exams || destination is AppDestination.ExamDetail ||
             destination is AppDestination.Schedule || destination is AppDestination.BellSchedule
         val domain = preferredLoginDomain(state, academicPage)
-        if (domain == Domain.ACADEMIC && state.portal == DomainStatus.READY &&
-            state.academic != DomainStatus.READY) {
-            reconnectAcademic(openLoginOnFailure = true)
+        if (state.accountScope != null &&
+            (state.portal != DomainStatus.READY || state.academic != DomainStatus.READY)) {
+            recoverSession(domain, openFormOnFailure = true)
             return
         }
         openVisibleLogin(domain)
     }
 
-    private fun maybeReconnectAcademic() {
+    private fun maybeRecoverSession() {
         val state = CampusDataProvider.session.state.value
-        if (authCoordinator.suppressResume() || state.accountScope == null ||
-            state.portal != DomainStatus.READY ||
-            state.academic !in setOf(DomainStatus.EXPIRED, DomainStatus.UNREACHABLE)) return
+        val scope = state.accountScope ?: return
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || authCoordinator.suppressResume() ||
+            recoveryJob?.isActive == true) return
+        val domain = when {
+            state.portal == DomainStatus.EXPIRED -> Domain.PORTAL
+            state.portal == DomainStatus.READY && state.academic == DomainStatus.EXPIRED -> Domain.ACADEMIC
+            else -> return
+        }
         val now = android.os.SystemClock.elapsedRealtime()
-        if (lastAutomaticReconnectScope == state.accountScope && now - lastAutomaticReconnectAt < 60_000) return
-        lastAutomaticReconnectScope = state.accountScope
-        lastAutomaticReconnectAt = now
-        reconnectAcademic(openLoginOnFailure = false)
+        if (!automaticLoginGate.begin(scope, domain, now)) return
+        recoverSession(domain, openFormOnFailure = false)
     }
 
     private fun maybeWarmECode() {
@@ -265,48 +270,58 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun reconnectAcademic(openLoginOnFailure: Boolean) {
-        if (academicReconnectJob?.isActive == true) {
-            openLoginAfterReconnect = openLoginAfterReconnect || openLoginOnFailure
+    private fun recoverSession(domain: Domain, openFormOnFailure: Boolean) {
+        if (authCoordinator.suppressResume()) return
+        if (recoveryJob?.isActive == true) {
+            openFormAfterRecovery = openFormAfterRecovery || openFormOnFailure
             return
         }
         val scope = CampusDataProvider.session.state.value.accountScope ?: return
-        openLoginAfterReconnect = openLoginOnFailure
-        academicReconnectJob = lifecycleScope.launch {
-            connectingAcademic = true
+        openFormAfterRecovery = openFormOnFailure
+        recoveryJob = lifecycleScope.launch {
+            connectingSchool = true
+            loginNotice = null
             try {
-                val connected = try {
-                    AcademicSsoConnector.connect(this@MainActivity)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    false
-                }
+                val result = OfficialLogin.recover(this@MainActivity, domain)
                 if (CampusDataProvider.session.state.value.accountScope != scope) return@launch
-                if (connected) {
-                    CampusDataProvider.allowImmediateRetry()
-                    lifecycleScope.launch {
-                        CampusDataProvider.sync.requestVisible(
-                            AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.MANUAL
-                        )
+                when (result) {
+                    LoginResult.Connected -> {
+                        CampusDataProvider.allowImmediateRetry()
+                        CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.MANUAL)
                     }
-                } else if (openLoginAfterReconnect) {
-                    val fallback = if (CampusDataProvider.session.state.value.portal == DomainStatus.READY) {
-                        Domain.ACADEMIC
-                    } else Domain.PORTAL
-                    openVisibleLogin(fallback)
+                    is LoginResult.ContinueOnWeb -> {
+                        automaticLoginGate.pause(scope, domain)
+                        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) openVisibleLogin(domain, result.token)
+                        else OfficialLogin.discardContinuation(result.token)
+                    }
+                    is LoginResult.NeedCredentials -> {
+                        automaticLoginGate.pause(scope, domain)
+                        loginNotice = if (result.rejected) "账号密码未通过学校认证，自动登录已暂停。" else "请填写账号密码以启用自动登录。"
+                        if (openFormAfterRecovery) openVisibleLogin(domain)
+                    }
+                    is LoginResult.Failed -> {
+                        loginNotice = result.message
+                        if (openFormAfterRecovery) openVisibleLogin(domain)
+                    }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                loginNotice = "学校连接暂时无法恢复，请稍后重试。"
             } finally {
-                connectingAcademic = false
-                openLoginAfterReconnect = false
-                academicReconnectJob = null
+                connectingSchool = false
+                openFormAfterRecovery = false
+                recoveryJob = null
             }
         }
     }
 
-    private fun openVisibleLogin(domain: Domain) {
-        if (!authCoordinator.begin(domain)) return
-        loginLauncher.launch(OfficialLogin.intent(this, domain))
+    private fun openVisibleLogin(domain: Domain, continuation: String? = null) {
+        if (!authCoordinator.begin(domain)) {
+            continuation?.let { OfficialLogin.discardContinuation(it) }
+            return
+        }
+        loginLauncher.launch(OfficialLogin.intent(this, domain, continuation))
     }
 
     override fun onResume() {
@@ -314,9 +329,22 @@ class MainActivity : ComponentActivity() {
         maybeWarmECode()
         // First resume is coalesced with the initial route event by SyncCoordinator.
         if (!authCoordinator.suppressResume()) lifecycleScope.launch {
+            val state = CampusDataProvider.session.state.value
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (state.accountScope != null && (state.accountScope != lastVerificationScope ||
+                now - lastVerificationAt >= 60_000 || state.portal == DomainStatus.UNVERIFIED || state.academic == DomainStatus.UNVERIFIED)) {
+                lastVerificationScope = state.accountScope
+                lastVerificationAt = now
+                CampusDataProvider.session.verify()
+            }
             CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.FOREGROUND)
-            maybeReconnectAcademic()
+            maybeRecoverSession()
         }
+    }
+
+    override fun onStop() {
+        recoveryJob?.cancel()
+        super.onStop()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
