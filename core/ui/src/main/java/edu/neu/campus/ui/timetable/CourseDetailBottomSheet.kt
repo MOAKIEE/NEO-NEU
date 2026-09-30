@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,9 +38,7 @@ fun CourseDetailBottomSheet(
 
     OverlayBottomSheet(
         show = course != null,
-        title = course?.title ?: "课程详情",
-        onDismissRequest = onDismiss,
-        startAction = { CampusSheetCloseAction(onClick = onDismiss) }
+        onDismissRequest = onDismiss
     ) {
         if (course != null) {
             val (courseAccentColor, _) = colors.courseColor(course.colorKey())
@@ -50,6 +50,26 @@ fun CourseDetailBottomSheet(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // 用实际分配宽度的标题行替代弹层居中标题，避免长名称覆盖关闭按钮。
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(CampusSpacing.sm),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    CampusSheetCloseAction(onClick = onDismiss)
+                    Text(
+                        text = course.title,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = CampusSpacing.xxs)
+                            .semantics { heading() },
+                        fontSize = 20.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                }
+
                 // 顶部细色条（与课块同色）
                 Box(
                     modifier = Modifier
