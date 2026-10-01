@@ -5,6 +5,8 @@
         android:theme="@style/Theme.NeoNeu"
         android:usesCleartextTraffic="false"
         android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
