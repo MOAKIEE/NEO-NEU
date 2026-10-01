@@ -22,6 +22,14 @@ class QueryCache(context: Context) {
         ensureMigrated()
         db.dao().save(CacheRow(scope, key, payload, savedAt))
     }
+
+    /** Keeps the newest [keep] week payloads of one term in [scope]; the whole-term payload stays. */
+    fun pruneWeekEntries(scope: String, termId: String, keep: Int) {
+        ensureMigrated()
+        val expired = WeekCacheRetention.expired(db.dao().keys(scope), termId, keep)
+        if (expired.isNotEmpty()) db.dao().deleteKeys(scope, expired)
+    }
+
     fun clearScope(scope: String) { ensureMigrated(); db.dao().clearScope(scope) }
 
     @Synchronized private fun ensureMigrated() {

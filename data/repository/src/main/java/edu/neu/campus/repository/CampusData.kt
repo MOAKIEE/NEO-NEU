@@ -79,6 +79,9 @@ class CampusData private constructor(context: Context) {
     } }
 
     companion object {
+        /** Week payloads kept per term and scope: enough for the current and neighbouring weeks offline. */
+        private const val RetainedWeeksPerTerm = 6
+
         @Volatile private var instance: CampusData? = null
         fun get(context: Context): CampusData = instance ?: synchronized(this) {
             instance ?: CampusData(context.applicationContext).also { instance = it }
@@ -92,6 +95,9 @@ class CampusData private constructor(context: Context) {
         @Volatile var generation = 0L
         fun invalidate() { state.value = QuerySnapshot() }
     }
+
+    /** Bounds how many per-week payloads one term keeps on disk after a successful write. */
+    private data class CacheRetention(val termId: String, val keep: Int)
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> slot(key: String, parse: (String) -> T): Slot<T> {
@@ -114,7 +120,8 @@ class CampusData private constructor(context: Context) {
         } as Slot<T>
     }
 
-    private suspend fun <T> refresh(key: String, domain: Domain, parse: (String) -> T, fetch: suspend () -> String) {
+    private suspend fun <T> refresh(key: String, domain: Domain, parse: (String) -> T,
+        retention: CacheRetention? = null, fetch: suspend () -> String) {
         val scope = localSession.state.value.accountScope
         val holder = slot(key, parse)
         holder.loaded.await()
@@ -148,7 +155,10 @@ class CampusData private constructor(context: Context) {
                 val now = System.currentTimeMillis()
                 withContext(Dispatchers.IO) {
                     cacheWriteLock.withLock {
-                        if (localSession.state.value.accountScope == scope) cache.save(scope, key, raw, now)
+                        if (localSession.state.value.accountScope == scope) {
+                            cache.save(scope, key, raw, now)
+                            retention?.let { cache.pruneWeekEntries(scope, it.termId, it.keep) }
+                        }
                     }
                 }
                 if (localSession.state.value.accountScope != scope) return
@@ -212,10 +222,24 @@ class CampusData private constructor(context: Context) {
             }
             return Timetable(term, week, campuses, sectionMap, arranged, unscheduled, practice)
         }
+
+        /**
+         * Campus list for building one week's timetable. A list read from the school in this process is
+         * authoritative for the same term, so a round that already refreshed it is reused instead of
+         * issuing a second identical CAMPUSES request; anything older is re-read from the school so the
+         * campus enumeration this build walks stays network-fresh.
+         */
+        private suspend fun campusesForTimetable(termId: String): List<Campus> {
+            val current = campuses(termId).value
+            if (current.phase == QueryPhase.READY && !current.isStale) {
+                current.data?.takeIf { it.isNotEmpty() }?.let { return it }
+            }
+            return academicApi.campuses(academicApi.raw(SchoolCall.CAMPUSES, termParams(termId)))
+        }
         override fun timetable(termId: String, week: Int?) = slot("table:$termId:$week", { parseTimetable(termId, week, it) }).state
-        override suspend fun refreshTimetable(termId: String, week: Int?) = refresh("table:$termId:$week", Domain.ACADEMIC, { parseTimetable(termId, week, it) }) {
-            val campusBody = academicApi.raw(SchoolCall.CAMPUSES, termParams(termId))
-            val campuses = academicApi.campuses(campusBody)
+        override suspend fun refreshTimetable(termId: String, week: Int?) = refresh("table:$termId:$week", Domain.ACADEMIC,
+            { parseTimetable(termId, week, it) }, CacheRetention(termId, RetainedWeeksPerTerm)) {
+            val campuses = campusesForTimetable(termId)
             val parts = JSONArray()
             for (campus in campuses) {
                 val params = mutableMapOf("XNXQDM" to termId, "XQDM" to campus.id)

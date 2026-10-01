@@ -54,6 +54,9 @@ class SyncCoordinator {
             if (withTable && withWeeks) {
                 val weeks = academic.weeks(term.id).value
                 val week = currentTeachingWeek(weeks.data.orEmpty(), schoolDateAt(System.currentTimeMillis()), weeks.lastSuccessEpochMillis)
+                // One campus read serves both the campus filter and the week build; the timetable refresh
+                // reuses it instead of issuing a second identical CAMPUSES request.
+                academic.refreshCampuses(term.id)
                 if (week != null) academic.refreshTimetable(term.id, week.number)
             }
         }
@@ -66,10 +69,7 @@ class SyncCoordinator {
                     launch { portal.refreshMessages(1, 5) }
                     launch { portal.refreshTasks(TaskKind.TODO, 1, 5) }
                 }
-                MainTab.TIMETABLE -> {
-                    refreshCurrentTerm(withWeeks = true, withExams = false, withTable = true)
-                    academic.terms().value.data?.firstOrNull { it.isCurrent }?.let { academic.refreshCampuses(it.id) }
-                }
+                MainTab.TIMETABLE -> refreshCurrentTerm(withWeeks = true, withExams = false, withTable = true)
                 MainTab.QUERY, MainTab.SETTINGS -> Unit
             }
             AppDestination.Grades -> {

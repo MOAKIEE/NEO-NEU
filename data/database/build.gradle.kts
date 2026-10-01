@@ -4,6 +4,7 @@ dependencies {
     api(project(":core:contract"))
     implementation("androidx.room:room-runtime:2.8.5")
     annotationProcessor("androidx.room:room-compiler:2.8.5")
+    testImplementation("junit:junit:4.13.2")
 }
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Aroom.schemaLocation=${projectDir}/schemas")
