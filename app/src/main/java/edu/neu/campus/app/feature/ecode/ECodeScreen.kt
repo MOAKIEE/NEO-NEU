@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -164,12 +165,20 @@ private fun ECodeCodePanel(onAuthenticate: () -> Unit) {
                 attemptedSso = true
                 fetched = ECodeSsoConnector.connect(activity, repository)
             }
-            result = fetched
             if (fetched is ECodeResult.Ready) {
+                val remaining = fetched.token.remainingMillisAt(SystemClock.elapsedRealtime())
+                if (remaining <= 750L) {
+                    result = ECodeResult.Unavailable
+                    break
+                }
+                result = fetched
                 // Remove the code before expiry, then fetch a fresh one. Never show stale codes.
-                delay((fetched.token.remainingMillis - 750L).coerceAtLeast(250L))
+                delay(remaining - 750L)
                 result = null
-            } else break
+            } else {
+                result = fetched
+                break
+            }
         }
     }
 
