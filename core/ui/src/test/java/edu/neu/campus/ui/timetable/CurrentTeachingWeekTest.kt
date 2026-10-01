@@ -18,6 +18,22 @@ class CurrentTeachingWeekTest {
         assertEquals(5, currentTeachingWeek(refreshed, "2026-09-28", null)?.number)
     }
 
+    @Test fun defaultTimetableDoesNotFallBackToFirstOrPreviousWeekAcrossTheBoundary() {
+        val cached = listOf(previous, next)
+        assertEquals(4, selectedTimetableWeek(cached, null, true, "2026-09-27", null))
+        assertNull(selectedTimetableWeek(cached, null, true, "2026-09-28", null))
+        val refreshed = listOf(previous.copy(isCurrent = false), next.copy(isCurrent = true))
+        assertEquals(5, selectedTimetableWeek(refreshed, null, true, "2026-09-28", null))
+    }
+
+    @Test fun explicitOldWeekAndHistoricalTermRemainBrowsableWithoutClaimingCurrentWeek() {
+        val cached = listOf(previous, next)
+        assertEquals(4, selectedTimetableWeek(cached, 4, true, "2026-09-28", null))
+        assertEquals(4, selectedTimetableWeek(cached, null, false, "2026-09-28", null))
+        assertNull(selectedTimetableWeek(cached, 99, true, "2026-09-28", null))
+        assertNull(currentTeachingWeek(cached, "2026-09-28", null))
+    }
+
     @Test fun offlineCacheWithinTheSameWeekRemainsUsable() {
         assertEquals(previous, currentTeachingWeek(listOf(previous), "2026-09-25", null))
     }

@@ -60,6 +60,9 @@ import edu.neu.campus.ui.timetable.TimetableGrid
 import edu.neu.campus.ui.timetable.TimetableLayout
 import edu.neu.campus.ui.timetable.buildTimetableLayout
 import edu.neu.campus.ui.timetable.colorKey
+import edu.neu.campus.ui.timetable.currentTeachingWeek
+import edu.neu.campus.ui.timetable.selectedTimetableWeek
+import edu.neu.campus.ui.timetable.schoolDateAt
 import edu.neu.campus.ui.timetable.dayOfWeekText
 import edu.neu.campus.ui.timetable.inferFirstDayOfWeek
 import edu.neu.campus.ui.timetable.isoDayOfWeek
@@ -95,6 +98,7 @@ fun TimetableScreen(
     val coroutineScope = rememberCoroutineScope()
     val academic = CampusDataProvider.academic
     val colors = CampusTheme.colors
+    val today = rememberSchoolToday()
 
     // ---- 数据：全部直接从快照派生，不经 LaunchedEffect 转存，避免进入页面首帧是空列表 ----
     val termsSnapshot by academic.terms().collectAsState()
@@ -108,33 +112,47 @@ fun TimetableScreen(
     val weeks = weeksSnapshot?.data.orEmpty()
     val campuses = termId?.let { academic.campuses(it).collectAsState().value }?.data.orEmpty()
     val firstDayOfWeek = remember(weeks) { inferFirstDayOfWeek(weeks) }
-    val currentActualWeek = weeks.firstOrNull { it.isCurrent }?.number
+    val currentActualWeek = currentTeachingWeek(weeks, today, weeksSnapshot?.lastSuccessEpochMillis)?.number
     val minWeek = weeks.minOfOrNull { it.number }
     val maxWeek = weeks.maxOfOrNull { it.number }
 
     var pickedWeek by rememberSaveable(termId) { mutableStateOf<Int?>(null) }
-    val weekNumber = pickedWeek?.takeIf { n -> weeks.isEmpty() || weeks.any { it.number == n } }
-        ?: currentActualWeek ?: weeks.firstOrNull()?.number
+    val weekNumber = selectedTimetableWeek(weeks, pickedWeek, currentTerm?.isCurrent != false,
+        today, weeksSnapshot?.lastSuccessEpochMillis)
     val week = weeks.firstOrNull { it.number == weekNumber }
     var selectedCampusId by rememberSaveable(termId) { mutableStateOf<String?>(null) }
     var isListView by rememberSaveable { mutableStateOf(false) }
 
-    val timetableSnapshot = termId?.let { academic.timetable(it, weekNumber).collectAsState().value }
+    val timetableSnapshot = if (termId != null && weekNumber != null) {
+        academic.timetable(termId, weekNumber).collectAsState().value
+    } else null
     val table = timetableSnapshot?.data
 
     // ---- 同步：进入页面由 SyncCoordinator 统一刷新；这里只补用户主动切换学期／周次后的请求 ----
-    DisposableEffect(termId, weekNumber) {
+    DisposableEffect(pickedTermId, pickedWeek) {
         val unregister = CampusDataProvider.sync.registerVisible(MainTab.TIMETABLE, AppDestination.Main) {
             academic.refreshTerms()
-            val id = termId ?: academic.terms().value.data?.firstOrNull { it.isCurrent }?.id
-            if (id != null) {
+            val latestTerms = academic.terms().value.data.orEmpty()
+            val term = latestTerms.firstOrNull { it.id == pickedTermId }
+                ?: latestTerms.firstOrNull { it.isCurrent } ?: latestTerms.firstOrNull()
+            if (term != null) {
+                val id = term.id
                 academic.refreshWeeks(id)
                 academic.refreshCampuses(id)
-                val targetWeek = weekNumber ?: academic.weeks(id).value.data?.firstOrNull { it.isCurrent }?.number
-                academic.refreshTimetable(id, targetWeek)
+                val latestWeeks = academic.weeks(id).value
+                val targetWeek = selectedTimetableWeek(latestWeeks.data.orEmpty(), pickedWeek,
+                    term.isCurrent, schoolDateAt(System.currentTimeMillis()), latestWeeks.lastSuccessEpochMillis)
+                if (targetWeek != null) academic.refreshTimetable(id, targetWeek)
             }
         }
         onDispose { unregister() }
+    }
+    var observedDate by remember { mutableStateOf(today) }
+    LaunchedEffect(today) {
+        if (observedDate != today) {
+            observedDate = today
+            CampusDataProvider.sync.requestVisible(MainTab.TIMETABLE, AppDestination.Main, SyncReason.MANUAL)
+        }
     }
     var termSeen by remember { mutableStateOf(false) }
     LaunchedEffect(termId) {
@@ -181,7 +199,6 @@ fun TimetableScreen(
     }
     val days = remember(week, firstDayOfWeek) { weekDaysOf(week, firstDayOfWeek) }
     val layout = remember(courses, sections, days) { buildTimetableLayout(courses, sections, days) }
-    val today = rememberSchoolToday()
     val gridScroll = rememberScrollState()
 
     val showGrid = !isListView && LocalDensity.current.fontScale < 1.3f &&
@@ -191,9 +208,10 @@ fun TimetableScreen(
         timetableSnapshot?.phase == QueryPhase.LOADING
     val hasStructure = table != null || sectionsByCampus.isNotEmpty()
     val contentMessage = when {
-        table == null && syncError != null -> "本周课表同步失败"
+        table == null && syncError != null -> "课表同步失败"
+        weekNumber == null -> "当前教学周尚未确认，请刷新或选择周次"
         table == null -> "正在加载${weekNumber?.let { "第 $it 周" } ?: ""}课表…"
-        courses.isEmpty() && timetableSnapshot?.phase != QueryPhase.LOADING -> "本周没有已安排的课程"
+        courses.isEmpty() && timetableSnapshot?.phase != QueryPhase.LOADING -> "所选周没有已安排的课程"
         else -> null
     }
 
@@ -274,7 +292,7 @@ fun TimetableScreen(
                     text = "回本周",
                     modifier = Modifier
                         .tapScale(
-                            onClick = { pickedWeek = currentActualWeek },
+                            onClick = { pickedWeek = null },
                             pressedScale = 0.94f,
                             clipShape = RoundedCornerShape(CampusShapes.pill)
                         )
@@ -319,7 +337,8 @@ fun TimetableScreen(
                 } else {
                     LoadStatePanel(
                         isLoading = isSyncing,
-                        emptyMessage = if (isSyncing) null else "暂无课表数据"
+                        emptyMessage = if (isSyncing) null else contentMessage ?: "暂无课表数据",
+                        onRetry = retry
                     )
                 }
             } else if (showGrid) {
@@ -520,7 +539,7 @@ fun TimetableScreen(
                 if (weeks.isEmpty()) item { CampusEmptyHint(text = "暂无教学周信息") }
                 itemsIndexed(weeks, key = { _, w -> w.number }) { _, w ->
                     CampusSelectionRow(
-                        title = "第 ${w.number} 周" + if (w.isCurrent) "（本周）" else "",
+                        title = "第 ${w.number} 周" + if (w.number == currentActualWeek) "（本周）" else "",
                         trailing = weekRangeText(w),
                         selected = w.number == weekNumber,
                         onClick = {

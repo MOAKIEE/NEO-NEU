@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import edu.neu.campus.app.CampusDataProvider
+import edu.neu.campus.app.SyncReason
 import edu.neu.campus.app.navigation.AppDestination
 import edu.neu.campus.app.navigation.AppNavigator
 import edu.neu.campus.app.navigation.MainTab
@@ -21,6 +22,7 @@ import edu.neu.campus.ui.components.*
 import edu.neu.campus.ui.theme.CampusShapes
 import edu.neu.campus.ui.theme.CampusSpacing
 import edu.neu.campus.ui.theme.CampusTheme
+import edu.neu.campus.ui.timetable.currentTeachingWeek
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
@@ -47,6 +49,8 @@ fun ScheduleScreen(
     val term = terms.data?.firstOrNull { it.id == selectedTermId }
         ?: terms.data?.firstOrNull { it.isCurrent }
     val weeks = term?.let { repo.weeks(it.id).collectAsState().value }
+    val today = rememberSchoolToday()
+    val currentWeek = currentTeachingWeek(weeks?.data.orEmpty(), today, weeks?.lastSuccessEpochMillis)?.number
     val table = term?.let { repo.timetable(it.id, null).collectAsState().value }
     DisposableEffect(term?.id, calendar) {
         val unregister = CampusDataProvider.sync.registerVisible(AppNavigator.currentTab, AppNavigator.currentDestination) {
@@ -57,6 +61,13 @@ fun ScheduleScreen(
             }
         }
         onDispose { unregister() }
+    }
+    var observedDate by remember { mutableStateOf(today) }
+    LaunchedEffect(today) {
+        if (observedDate != today) {
+            observedDate = today
+            CampusDataProvider.sync.requestVisible(AppNavigator.currentTab, AppNavigator.currentDestination, SyncReason.MANUAL)
+        }
     }
     var initialScheduleTermSeen by remember { mutableStateOf(false) }
     LaunchedEffect(term?.id) {
@@ -147,10 +158,10 @@ fun ScheduleScreen(
                                     )
                                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                         Text(
-                                            "第 ${week.number} 周${if (week.isCurrent) " · 本周" else ""}",
+                                            "第 ${week.number} 周${if (week.number == currentWeek) " · 本周" else ""}",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = if (week.isCurrent) colors.brand else colors.textPrimary
+                                            color = if (week.number == currentWeek) colors.brand else colors.textPrimary
                                         )
                                         Text(
                                             "${week.startDate ?: "日期未提供"} — ${week.endDate ?: "日期未提供"}",

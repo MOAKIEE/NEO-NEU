@@ -64,6 +64,14 @@ fun currentTeachingWeek(
     return week.takeIf { lastSuccessEpochMillis?.let(::schoolDateAt) == today }
 }
 
+/** An explicit historical selection remains browsable; an unconfirmed current week is not invented. */
+fun selectedTimetableWeek(
+    weeks: List<TeachingWeek>, selected: Int?, isCurrentTerm: Boolean,
+    today: String, lastSuccessEpochMillis: Long?
+): Int? = selected?.takeIf { number -> weeks.any { it.number == number } }
+    ?: currentTeachingWeek(weeks, today, lastSuccessEpochMillis)?.number
+    ?: weeks.firstOrNull()?.number?.takeUnless { isCurrentTerm }
+
 private fun daysBetween(start: Calendar, end: Calendar): Long =
     Math.round((end.timeInMillis - start.timeInMillis) / 86_400_000.0)
 
