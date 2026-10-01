@@ -36,6 +36,7 @@ import edu.neu.campus.ui.theme.ThemeManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -69,6 +70,8 @@ class OfficialLoginActivity : ComponentActivity() {
     private var checkJob: Job? = null
     private var checkAgain = false
     private var scopeWatcher: Job? = null
+    private var isolationJob: Job? = null
+    internal var createVisibleBrowser: (String) -> LoginBrowser = { LoginBrowser(this, it) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -151,7 +154,7 @@ class OfficialLoginActivity : ComponentActivity() {
         model.pendingBrowser = null
     }
 
-    private fun continueChallenge() {
+    internal fun continueChallenge() {
         if (model.busy) return
         val browser = model.pendingBrowser ?: return
         model.pendingBrowser = null
@@ -202,8 +205,8 @@ class OfficialLoginActivity : ComponentActivity() {
         model.busy = true
         loginJob = lifecycleScope.launch {
             try {
-                val scope = session.beginLogin()
-                val browser = LoginBrowser(this@OfficialLoginActivity, scope)
+                val scope = session.beginLogin(clearCookies = true)
+                val browser = createVisibleBrowser(scope)
                 model.selectedSite = if (target == Domain.ACADEMIC) 1 else 0
                 attachVisible(browser)
                 browser.load(if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY)
@@ -214,22 +217,70 @@ class OfficialLoginActivity : ComponentActivity() {
     }
 
     private suspend fun showChallenge(browser: LoginBrowser) {
-        // Visible forms can switch accounts. Isolate personal caches before allowing interaction.
-        val scope = try { session.beginLogin(keepCredentials = true, expectedScope = browser.scope) }
-        catch (error: Exception) { browser.destroy(); throw error }
-        browser.scope = scope
-        model.selectedSite = browser.siteIndex
+        // There is no verified cross-domain account identifier. A random cache partition alone
+        // cannot isolate old academic/e-code cookies when the user edits the CAS account.
+        val expectedScope = browser.scope
+        val page = browser.pageTarget
+        val site = browser.siteIndex
+        checkAgain = false
+        checkJob?.cancelAndJoin()
+        scopeWatcher?.cancelAndJoin()
+        model.busy = true
+        browser.destroy()
+        if (model.browser === browser) model.browser = null
+        val scope = session.beginLogin(keepCredentials = true, clearCookies = true, expectedScope = expectedScope)
+        val fresh = createVisibleBrowser(scope).apply { pageTarget = page }
+        model.selectedSite = site
+        model.attemptedAcademicHandoff = false
         model.error = null
-        attachVisible(browser)
+        attachVisible(fresh)
+        // Service completion verifies the portal first, then returns to its saved service route.
+        fresh.load(if (page != null || site == 0) PORTAL_ENTRY else ACADEMIC_ENTRY)
     }
 
     private fun attachVisible(browser: LoginBrowser) {
         browser.attachTo(this, visible = true)
         model.browser = browser
         browser.onChange = { model.selectedSite = browser.siteIndex; model.browserRevision++ }
+        browser.onStarted = {
+            checkAgain = false
+            checkJob?.cancel()
+            isolationJob?.cancel()
+            isolationJob = null
+            val host = android.net.Uri.parse(browser.web.url.orEmpty()).host
+            if (browser.interactiveLoginGate.requiresFreshSession(host)) {
+                browser.interactiveIsolationPending = true
+            }
+            if (host != "pass.neu.edu.cn") {
+                browser.interactiveIsolationPending = false
+                browser.web.alpha = 1f
+            }
+            if (browser.interactiveIsolationPending) {
+                // Allow a transparent CAS SSO redirect, but conceal any editable form until reset.
+                browser.web.alpha = 0f
+            }
+        }
         browser.onLoaded = {
             val host = android.net.Uri.parse(browser.web.url.orEmpty()).host
-            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+            if (browser.interactiveIsolationPending && host == "pass.neu.edu.cn" &&
+                lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                val revision = browser.navigationRevision
+                isolationJob?.cancel()
+                isolationJob = lifecycleScope.launch {
+                    delay(1500)
+                    if (browser.destroyed || browser.loading || browser.navigationRevision != revision ||
+                        model.browser !== browser) return@launch
+                    // A stable CAS page needs interaction. Discard its old business sessions.
+                    isolationJob = null
+                    model.busy = true
+                    loginJob = lifecycleScope.launch {
+                        try { showChallenge(browser) }
+                        catch (cancelled: CancellationException) { browser.destroy(); throw cancelled }
+                        catch (_: Exception) { browser.destroy(); model.browser = null; model.error = LoginFailure.STORAGE.message }
+                        finally { model.busy = false }
+                    }
+                }
+            } else if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
                 (host == "personal.neu.edu.cn" || host == "jwxt.neu.edu.cn" ||
                 browser.pageTarget?.cataloguePage?.isDestination(browser.web.url.orEmpty()) == true)) checkConnection(automatic = true)
         }
@@ -240,6 +291,8 @@ class OfficialLoginActivity : ComponentActivity() {
             if (model.browser === browser) model.browser = null
             model.error = "账号状态已变化，请重新登录。"
         }
+        // Navigation may have completed while this same browser was parked for rotation.
+        if (!browser.web.url.isNullOrBlank()) browser.onStarted()
     }
 
     private fun openSite(index: Int) {
@@ -249,6 +302,7 @@ class OfficialLoginActivity : ComponentActivity() {
     }
 
     private fun checkConnection(automatic: Boolean = false) {
+        if (loginJob?.isActive == true || model.browser?.interactiveIsolationPending == true) return
         if (checkJob?.isActive == true) {
             if (automatic) checkAgain = true
             return
@@ -303,7 +357,7 @@ class OfficialLoginActivity : ComponentActivity() {
     private fun refreshChallenge() {
         if (model.busy) return
         model.browser?.let { browser ->
-            browser.load(browser.pageTarget?.authenticationEntry ?: if (model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY)
+            browser.load(if (browser.pageTarget != null || model.selectedSite == 0) PORTAL_ENTRY else ACADEMIC_ENTRY)
         }
     }
 
@@ -328,6 +382,7 @@ class OfficialLoginActivity : ComponentActivity() {
         checkAgain = false
         loginJob?.cancel()
         checkJob?.cancel()
+        isolationJob?.cancel()
         super.onStop()
     }
 
@@ -338,7 +393,7 @@ class OfficialLoginActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        scopeWatcher?.cancel(); checkJob?.cancel()
+        scopeWatcher?.cancel(); checkJob?.cancel(); isolationJob?.cancel()
         if (isChangingConfigurations) model.browser?.park()
         else { model.browser?.destroy(); model.browser = null; discardPendingChallenge(); model.password = "" }
         super.onDestroy()

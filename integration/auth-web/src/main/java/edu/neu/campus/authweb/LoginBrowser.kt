@@ -31,7 +31,7 @@ internal enum class LoginFailure(val message: String) {
     STORAGE("无法加密保存账号密码，请重试或使用学校网页登录。")
 }
 
-/** One browser is moved from the invisible attempt into the visible challenge without reloading. */
+/** Silent navigation may be parked in memory; editable authentication starts with a fresh session. */
 internal class LoginBrowser(activity: Activity, var scope: String) {
     private val context = MutableContextWrapper(activity)
     private val automation = activity.assets.open("school-login.js").bufferedReader().use { it.readText() }
@@ -48,6 +48,8 @@ internal class LoginBrowser(activity: Activity, var scope: String) {
     var pageTarget: OfficialPage? = null
     var serviceVisible = false
     var automaticSubmitted = false
+    val interactiveLoginGate = InteractiveLoginGate()
+    var interactiveIsolationPending = false
     var destroyed = false
         private set
     var siteIndex = 0

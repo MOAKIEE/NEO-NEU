@@ -122,4 +122,26 @@ class SavedCredentialsDeviceTest {
         assertEquals("synthetic-new-account", session.readCredentials(newScope)?.account)
         session.signOut()
     }
+
+    @Test fun visibleAuthenticationRemovesEveryOldBusinessCookieBeforePublishingItsScope() = runBlocking {
+        val session = withContext(Dispatchers.Main) { LocalSession(context) }
+        val oldScope = session.beginLogin(clearCookies = true)
+        try {
+            session.saveCredentials(oldScope, SchoolCredentials("synthetic-account", "synthetic-secret"))
+            val urls = listOf("https://personal.neu.edu.cn/portal", "https://jwxt.neu.edu.cn/jwapp",
+                "https://ecode.neu.edu.cn/ecode/", "https://pass.neu.edu.cn/tpass/login")
+            for (url in urls) {
+                session.acceptSetCookies(oldScope, url, listOf("synthetic_session=old-account; Path=/; Secure; HttpOnly"))
+                assertNotNull(session.cookieHeader(url))
+            }
+            val nextScope = session.beginLogin(keepCredentials = true, clearCookies = true, expectedScope = oldScope)
+            assertNotEquals(oldScope, nextScope)
+            for (url in urls) assertNull(session.cookieHeader(url))
+            session.acceptSetCookies(oldScope, urls.first(), listOf("synthetic_session=late-old-account; Path=/; Secure"))
+            assertNull(session.cookieHeader(urls.first()))
+            assertEquals(SavedLoginStatus.PAUSED, session.savedLoginStatus.value)
+            assertNull(session.readCredentials(nextScope))
+            assertNotNull(session.readCredentials(nextScope, includePaused = true))
+        } finally { session.signOut() }
+    }
 }

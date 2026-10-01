@@ -9,6 +9,7 @@ import edu.neu.campus.session.SchoolCredentials
 import edu.neu.campus.session.LocalSession
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -189,6 +190,55 @@ class LoginBrowserDeviceTest {
                     assertEquals(scope, session.state.value.accountScope)
                 }
                 assertTrue(browser.destroyed)
+            }
+        } finally { session.signOut() }
+    }
+
+    @Test fun continuingInteractiveLoginClearsOldCookiesAndRestartsBeforeShowingAForm() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val session = withContext(Dispatchers.Main) { LocalSession.get(context) }
+        val oldScope = session.beginLogin(clearCookies = true)
+        session.saveCredentials(oldScope, SchoolCredentials("synthetic-account", "synthetic-secret"))
+        session.pauseAutomaticLogin(oldScope)
+        val urls = listOf("https://personal.neu.edu.cn/portal", "https://jwxt.neu.edu.cn/jwapp",
+            "https://ecode.neu.edu.cn/ecode/", "https://pass.neu.edu.cn/tpass/login")
+        try {
+            for (url in urls) session.acceptSetCookies(oldScope, url,
+                listOf("synthetic_session=previous-account; Path=/; Secure; HttpOnly"))
+            scenario().use { scenario ->
+                lateinit var activity: OfficialLoginActivity
+                scenario.onActivity { activity = it }
+                val pending = load(activity, html.replace("</form>", "<input name='captcha'></form>"))
+                withContext(Dispatchers.Main) {
+                    pending.scope = oldScope
+                    pending.pageTarget = OfficialPage.ECODE
+                    activity.createVisibleBrowser = { scope ->
+                        LoginBrowser(activity, scope).apply { web.settings.blockNetworkLoads = true }
+                    }
+                    ViewModelProvider(activity)[LoginScreenModel::class.java].pendingBrowser = pending
+                    activity.continueChallenge()
+                }
+                val fresh = withTimeout(10000) {
+                    var fresh: LoginBrowser? = null
+                    while (fresh == null) {
+                        fresh = withContext(Dispatchers.Main) {
+                            val model = ViewModelProvider(activity)[LoginScreenModel::class.java]
+                            model.browser?.takeUnless { model.busy }
+                        }
+                        if (fresh == null) delay(50)
+                    }
+                    fresh
+                }
+                assertTrue(pending.destroyed)
+                assertNotSame(pending, fresh)
+                assertNotEquals(oldScope, fresh.scope)
+                assertEquals(OfficialPage.ECODE, fresh.pageTarget)
+                assertEquals(PORTAL_ENTRY, withContext(Dispatchers.Main) { fresh.web.url })
+                for (url in urls) assertNull(session.cookieHeader(url))
+                assertEquals(edu.neu.campus.session.SavedLoginStatus.PAUSED, session.savedLoginStatus.value)
+                scenario.recreate()
+                scenario.onActivity { assertSame(fresh, ViewModelProvider(it)[LoginScreenModel::class.java].browser) }
+                assertEquals(fresh.scope, session.state.value.accountScope)
             }
         } finally { session.signOut() }
     }

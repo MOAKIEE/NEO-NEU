@@ -2,6 +2,7 @@ package edu.neu.campus.session
 
 import android.content.Context
 import android.webkit.CookieManager
+import android.webkit.WebStorage
 import edu.neu.campus.contract.Domain
 import edu.neu.campus.contract.DomainStatus
 import edu.neu.campus.contract.SessionState
@@ -56,6 +57,7 @@ class LocalSession(context: Context) {
         if (!hadScope || clearCookies) {
             // A fresh login cannot inherit cookies left by an interrupted sign-out.
             withContext(Dispatchers.Main.immediate) {
+                WebStorage.getInstance().deleteAllData()
                 suspendCancellableCoroutine<Unit> { continuation ->
                     cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
                 }
@@ -63,7 +65,7 @@ class LocalSession(context: Context) {
             withContext(Dispatchers.IO) { cookies.flush() }
         }
         // Rotating the local scope isolates old cached data if the official page switches accounts.
-        // Existing CAS and business cookies remain available for SSO during recovery.
+        // Silent recovery does not rotate scopes. Visible authentication explicitly clears cookies.
         // Once published, the new scope and its encrypted credentials must commit together,
         // even if the owning screen rotates or goes into the background during the IO write.
         withContext(NonCancellable) {
@@ -172,6 +174,7 @@ class LocalSession(context: Context) {
             } finally {
                 try {
                     withContext(Dispatchers.Main.immediate) {
+                        WebStorage.getInstance().deleteAllData()
                         suspendCancellableCoroutine<Unit> { continuation ->
                             cookies.removeAllCookies { if (continuation.isActive) continuation.resume(Unit) }
                         }

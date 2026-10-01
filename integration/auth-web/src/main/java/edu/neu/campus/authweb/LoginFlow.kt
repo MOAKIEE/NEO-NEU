@@ -18,6 +18,23 @@ internal class SavedLoginEntryGate {
 
 internal enum class LoginStep { WAIT, OPEN_ACADEMIC, FINISH }
 
+/** A second visit to CAS after leaving it may select a different account. */
+internal class InteractiveLoginGate {
+    private var visitedCas = false
+    private var leftCas = false
+
+    fun requiresFreshSession(host: String?): Boolean {
+        if (host == "pass.neu.edu.cn") {
+            val restart = visitedCas && leftCas
+            visitedCas = true
+            leftCas = false
+            return restart
+        }
+        if (visitedCas) leftCas = true
+        return false
+    }
+}
+
 /** onPageFinished can precede a scripted SSO redirect or late DOM initialization. */
 internal class UnknownLoginPageGate {
     private var navigation: Int? = null
